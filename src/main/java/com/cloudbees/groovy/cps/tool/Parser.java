@@ -260,7 +260,7 @@ public class Parser {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(dotclass(erasure(vt.getType())))
+                        .arg(erasure(vt.getType()).dotclass())
                         .arg(n(vt.getName()))
                         .arg(visit(vt.getInitializer()));
             }
@@ -271,7 +271,7 @@ public class Parser {
                 return idt.sym.accept(new DefaultSymbolVisitor<JExpression, Void>() {
                     @Override
                     public JExpression visitClassSymbol(ClassSymbol cs, Void __) {
-                        return $b.invoke("constant").arg(dotclass(t(cs.asType())));
+                        return $b.invoke("constant").arg(t(cs.asType()).dotclass());
                     }
 
                     @Override
@@ -314,7 +314,7 @@ public class Parser {
                 return $b.invoke("cast")
                         .arg(loc(tt))
                         .arg(visit(tt.getExpression()))
-                        .arg(dotclass(t(tt.getType())))
+                        .arg(t(tt.getType()).dotclass())
                         .arg(JExpr.lit(false));
             }
 
@@ -358,12 +358,6 @@ public class Parser {
         if (m.getKind().isPrimitive())
             return JType.parse(codeModel,m.toString());
         return codeModel.directClass(m.toString());
-    }
-
-    private JExpression dotclass(JType t) {
-        // TODO: fix this in codemodel
-        return JExpr.dotclass(t.boxify());
-
     }
 
     private String n(Element e) {
