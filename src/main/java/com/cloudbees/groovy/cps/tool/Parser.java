@@ -298,6 +298,17 @@ public class Parser {
                 return $b.invoke("return_").arg(visit(rt.getExpression()));
             }
 
+            /**
+             * When used outside {@link MethodInvocationTree}, this is property access.
+             */
+            @Override
+            public JExpression visitMemberSelect(MemberSelectTree mt, Void __) {
+                return $b.invoke("property")
+                        .arg(loc(mt))
+                        .arg(visit(mt.getExpression()))
+                        .arg(n(mt.getIdentifier()));
+            }
+
             @Override
             public JExpression visitTypeCast(TypeCastTree tt, Void __) {
                 return $b.invoke("cast")
