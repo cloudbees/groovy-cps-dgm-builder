@@ -9,20 +9,22 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
+import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.util.JavacTask;
@@ -57,7 +59,6 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -140,13 +141,6 @@ public class Parser {
                 public Void visitExecutable(ExecutableElement e, Void __) {
                     if (isGdkMethodWithClosureArgument(e)) {
                         translate(dgmCut, e);
-                        // DEBUG
-                        try {
-                            codeModel.build(new SingleStreamCodeWriter(System.out));
-                        } catch (IOException x) {
-                            x.printStackTrace();
-                        }
-                        System.exit(0);
                     }
                     return null;
                 }
@@ -266,7 +260,7 @@ public class Parser {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(dotclass(t(vt.getType())))
+                        .arg(dotclass(erasure(vt.getType())))
                         .arg(n(vt.getName()))
                         .arg(visit(vt.getInitializer()));
             }
@@ -305,6 +299,20 @@ public class Parser {
             }
 
             @Override
+            public JExpression visitTypeCast(TypeCastTree tt, Void __) {
+                return $b.invoke("cast")
+                        .arg(loc(tt))
+                        .arg(visit(tt.getExpression()))
+                        .arg(dotclass(t(tt.getType())))
+                        .arg(JExpr.lit(false));
+            }
+
+            @Override
+            public JExpression visitExpressionStatement(ExpressionStatementTree et, Void __) {
+                return visit(et.getExpression());
+            }
+
+            @Override
             protected JExpression defaultAction(Tree node, Void aVoid) {
                 throw new UnsupportedOperationException();
             }
@@ -319,8 +327,20 @@ public class Parser {
         return inv;
     }
 
+    /**
+     * Convert a type representation from javac to codemodel.
+     */
     private JType t(Tree t) {
-        throw new UnsupportedOperationException();
+        return t.accept(new TypeTranslator(), null);
+    }
+
+    private JType erasure(Tree t) {
+        return t.accept(new TypeTranslator() {
+            @Override
+            public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
+                return pt.getType().accept(this, __);
+            }
+        }, null);
     }
 
     private JType t(TypeMirror m) {
@@ -351,4 +371,24 @@ public class Parser {
 
     private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
 
+    /**
+     * Converts a type expression from javac to codemodel.
+     */
+    private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
+        @Override
+        public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
+            JClass base = (JClass)pt.getType().accept(this, __);
+            List<JClass> args = new ArrayList<>();
+            for (Tree arg : pt.getTypeArguments()) {
+                args.add((JClass)arg.accept(this,__));
+            }
+            return base.narrow(args);
+        }
+
+        @Override
+        public JType visitIdentifier(IdentifierTree it, Void __) {
+            JCIdent idt = (JCIdent) it;
+            return t(idt.sym.asType());
+        }
+    }
 }
