@@ -42,6 +42,7 @@ import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.tree.WhileLoopTree;
+import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SimpleTreeVisitor;
 import com.sun.source.util.Trees;
@@ -573,6 +574,13 @@ public class Parser {
         @Override
         public JType visitMemberSelect(MemberSelectTree mt, Void __) {
             return t(((JCFieldAccess)mt).type);
+        }
+
+        @Override
+        public JType visitWildcard(WildcardTree wt, Void __) {
+            Tree b = wt.getBound();
+            if (b==null)    return codeModel.wildcard();
+            else            return t(b).boxify().wildcard();
         }
 
         @Override
