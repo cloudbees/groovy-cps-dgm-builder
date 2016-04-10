@@ -20,6 +20,7 @@ import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.BreakTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
@@ -492,6 +493,14 @@ public class Parser {
                 return $b.invoke("throw_")
                         .arg(loc(tt))
                         .arg(visit(tt.getExpression()));
+            }
+
+            @Override
+            public JExpression visitDoWhileLoop(DoWhileLoopTree dt, Void __) {
+                return $b.invoke("doWhile")
+                        .arg(JExpr._null())
+                        .arg(visit(dt.getStatement()))
+                        .arg(visit(dt.getCondition()));
             }
 
             @Override
