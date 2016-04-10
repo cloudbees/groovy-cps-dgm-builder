@@ -21,6 +21,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.IfTree;
 import com.sun.source.tree.LiteralTree;
@@ -410,6 +411,15 @@ public class Parser {
                     inv.arg(t(nt.getType()).dotclass());
                     nt.getDimensions().stream().forEach( d -> inv.arg(visit(d)));
                 });
+            }
+
+            @Override
+            public JExpression visitForLoop(ForLoopTree ft, Void __) {
+                return $b.invoke("forLoop")
+                        .arg($b.invoke("sequence").tap(inv -> { ft.getInitializer().forEach( i -> inv.arg(visit(i)));}))
+                        .arg(visit(ft.getCondition()))
+                        .arg($b.invoke("sequence").tap(inv -> { ft.getUpdate().forEach( i -> inv.arg(visit(i)));}))
+                        .arg(visit(ft.getStatement()));
             }
 
             @Override
