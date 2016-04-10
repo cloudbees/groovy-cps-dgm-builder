@@ -275,8 +275,8 @@ public class Parser {
                         .arg($b.invoke("this_"))
                         .arg(JExpr.lit(n(it.getName())));
                 } else {
-                // TODO: figure out what can come here
-                throw new UnsupportedOperationException();
+                    // TODO: figure out what can come here
+                    throw new UnsupportedOperationException(ms.toString());
                 }
 
                 for (ExpressionTree arg : mt.getArguments()) {
@@ -310,7 +310,7 @@ public class Parser {
 
                     @Override
                     public JExpression visitSymbol(Symbol s, Void __) {
-                        throw new UnsupportedOperationException();
+                        throw new UnsupportedOperationException(s.toString());
                     }
                 }, __);
             }
@@ -395,7 +395,7 @@ public class Parser {
                 switch (bt.getKind()) {
                 case EQUAL_TO:      return JOp.eq(lhs,rhs);
                 }
-                throw new UnsupportedOperationException();
+                throw new UnsupportedOperationException(bt.toString());
             }
 
             @Override
@@ -404,7 +404,7 @@ public class Parser {
                 switch (ut.getKind()) {
                 case POSTFIX_INCREMENT: return JOp.incr(e);
                 }
-                throw new UnsupportedOperationException();
+                throw new UnsupportedOperationException(ut.toString());
             }
 
             @Override
@@ -457,7 +457,7 @@ public class Parser {
 
             @Override
             protected JExpression defaultAction(Tree node, Void aVoid) {
-                throw new UnsupportedOperationException();
+                throw new UnsupportedOperationException(node.toString());
             }
         }, null));
 
@@ -533,7 +533,7 @@ public class Parser {
             case DOUBLE:    return codeModel.DOUBLE;
             case VOID:      return codeModel.VOID;
             }
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException(pt.toString());
         }
 
         @Override
@@ -551,7 +551,7 @@ public class Parser {
 
         @Override
         protected JType defaultAction(Tree node, Void aVoid) {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException(node.toString());
         }
     }
 }
