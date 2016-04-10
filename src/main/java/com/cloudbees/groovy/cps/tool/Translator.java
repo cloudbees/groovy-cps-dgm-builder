@@ -56,6 +56,7 @@ import com.sun.source.util.Trees;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
+import com.sun.tools.javac.code.Symbol.TypeVariableSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
@@ -82,6 +83,7 @@ import javax.lang.model.type.TypeVariable;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.ElementScanner7;
 import javax.lang.model.util.Elements;
+import javax.lang.model.util.SimpleElementVisitor7;
 import javax.lang.model.util.SimpleTypeVisitor6;
 import javax.lang.model.util.Types;
 import javax.tools.DiagnosticListener;
@@ -341,7 +343,7 @@ public class Translator {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(t(vt).dotclass())
+                        .arg(erasuse(vt).dotclass())
                         .arg(n(vt))
                         .arg(visit(vt.getInitializer()));
             }
@@ -395,7 +397,7 @@ public class Translator {
                 return $b.invoke("cast")
                         .arg(loc(tt))
                         .arg(visit(tt.getExpression()))
-                        .arg(t(tt.getType()).dotclass())
+                        .arg(erasuse(tt.getType()).dotclass())
                         .arg(JExpr.lit(false));
             }
 
@@ -521,7 +523,7 @@ public class Translator {
                 return $b.invoke("forInLoop")
                         .arg(loc(et))
                         .arg(JExpr._null())
-                        .arg(t(et.getVariable()).dotclass())
+                        .arg(erasuse(et.getVariable()).dotclass())
                         .arg(n(et.getVariable()))
                         .arg(visit(et.getExpression()))
                         .arg(visit(et.getStatement()));
@@ -612,6 +614,42 @@ public class Translator {
      */
     private JType t(Tree t) {
         return t.accept(new TypeTranslator(), null);
+    }
+
+    /**
+     * Converts a type representation to its erasure.
+     */
+    private JType erasuse(Tree t) {
+        return t.accept(new TypeTranslator() {
+            @Override
+            public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
+                return visit(pt.getType());
+            }
+
+            @Override
+            public JType visitWildcard(WildcardTree wt, Void __) {
+                Tree b = wt.getBound();
+                if (b==null)    return codeModel.ref(Object.class);
+                else            return visit(b);
+            }
+
+            @Override
+            public JType visitIdentifier(IdentifierTree it, Void __) {
+                JCIdent idt = (JCIdent) it;
+                if (idt.sym instanceof ClassSymbol) {
+                    ClassSymbol cs = (ClassSymbol) idt.sym;
+                    return codeModel.ref(cs.className());
+                }
+                if (idt.sym instanceof TypeVariableSymbol) {
+                    TypeVariableSymbol tcs = (TypeVariableSymbol) idt.sym;
+                    if (tcs.getBounds().isEmpty())
+                        return codeModel.ref(Object.class);
+                    else
+                        return t(tcs.getBounds().get(0));
+                }
+                throw new UnsupportedOperationException(idt.sym.toString());
+            }
+        }, null);
     }
 
     private JType t(TypeMirror m) {
@@ -715,7 +753,7 @@ public class Translator {
             "filterLine"    /* anonymous inner classes*/ ));
 
     private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
-        private JType visit(Tree t) {
+        protected JType visit(Tree t) {
             return visit(t,null);
         }
 
