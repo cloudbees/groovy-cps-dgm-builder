@@ -21,6 +21,7 @@ import com.sun.source.tree.BreakTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.CompoundAssignmentTree;
+import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
@@ -424,6 +425,7 @@ public class Parser {
                 case EQUAL_TO:              return "compareEqual";
                 case NOT_EQUAL_TO:          return "compareNotEqual";
                 case LESS_THAN_EQUAL:       return "lessThanEqual";
+                case LESS_THAN:             return "lessThan";
                 case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
                 case LOGICAL_COMPLEMENT:    return "not";
@@ -511,6 +513,14 @@ public class Parser {
                         .arg(JExpr._null())
                         .arg(visit(dt.getStatement()))
                         .arg(visit(dt.getCondition()));
+            }
+
+            @Override
+            public JExpression visitConditionalExpression(ConditionalExpressionTree ct, Void __) {
+                return $b.invoke("ternaryOp")
+                        .arg(visit(ct.getCondition()))
+                        .arg(visit(ct.getTrueExpression()))
+                        .arg(visit(ct.getFalseExpression()));
             }
 
             @Override
