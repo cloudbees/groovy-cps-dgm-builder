@@ -284,7 +284,7 @@ public class Translator {
              */
             private JExpression loc(Tree t) {
                 long pos = trees.getSourcePositions().getStartPosition(cut, t);
-                return JExpr.lit(cut.getLineMap().getLineNumber(pos));
+                return JExpr.lit((int)cut.getLineMap().getLineNumber(pos));
             }
 
             @Override
