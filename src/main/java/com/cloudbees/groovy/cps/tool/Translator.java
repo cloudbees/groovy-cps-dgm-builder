@@ -6,12 +6,14 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFormatter;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
@@ -72,8 +74,6 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.NoType;
@@ -92,6 +92,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.File;
+import java.io.FileWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -103,10 +104,12 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
+ * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
+ *
  * @author Kohsuke Kawaguchi
  */
 @SuppressWarnings("Since15")
-public class Parser {
+public class Translator {
 
     private Types types;
     private Elements elements;
@@ -124,7 +127,7 @@ public class Parser {
     private final JClass $CatchExpression;
     private final JClass $DefaultGroovyMethods;
 
-    public Parser() {
+    public Translator() {
         try {
             $CpsDefaultGroovyMethods = codeModel._class("com.cloudbees.groovy.cps.CpsDefaultGroovyMethods");
         } catch (JClassAlreadyExistsException e) {
@@ -139,7 +142,7 @@ public class Parser {
     }
 
     public static void main(String[] args) throws Exception {
-        new Parser().foo(new File("DefaultGroovyMethods.java"));
+        new Translator().foo(new File("DefaultGroovyMethods.java"));
     }
 
     public void foo(File dgmJava) throws Exception {
@@ -202,7 +205,9 @@ public class Parser {
                 fileManager.close();
         }
 
-        codeModel.build(new SingleStreamCodeWriter(System.out));
+        File dir = new File("out");
+        dir.mkdirs();
+        codeModel.build(new FileCodeWriter(dir));
     }
 
     private CompilationUnitTree getDefaultGroovyMethodCompilationUnitTree(Iterable<? extends CompilationUnitTree> parsed) {
@@ -250,7 +255,7 @@ public class Parser {
             ))._then()._return($DefaultGroovyMethods.staticInvoke(methodName).args(params));
         }
 
-        JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg("each")));
+        JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));
         JInvocation f = JExpr._new($CpsFunction);
 
         // parameter names
