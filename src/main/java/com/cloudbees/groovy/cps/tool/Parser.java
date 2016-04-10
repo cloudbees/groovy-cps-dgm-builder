@@ -602,7 +602,7 @@ public class Parser {
 
             @Override
             public JType visitDeclared(DeclaredType t, Void __) {
-                String name = n(t.asElement());
+                String name = n(((TypeElement)t.asElement()).getQualifiedName());
                 if (name.isEmpty())
                     throw new UnsupportedOperationException("Anonymous class: "+t);
                 JClass base = codeModel.ref(name);
@@ -687,7 +687,7 @@ public class Parser {
         @Override
         public JType visitIdentifier(IdentifierTree it, Void __) {
             JCIdent idt = (JCIdent) it;
-            return t(idt.sym.asType());
+            return codeModel.ref(idt.sym.toString());
         }
 
         @Override
