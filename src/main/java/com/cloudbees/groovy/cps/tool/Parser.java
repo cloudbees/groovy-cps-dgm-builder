@@ -318,7 +318,7 @@ public class Parser {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(t(vt.getType()).dotclass())
+                        .arg(t(vt).dotclass())
                         .arg(n(vt))
                         .arg(visit(vt.getInitializer()));
             }
@@ -498,7 +498,7 @@ public class Parser {
                 return $b.invoke("forInLoop")
                         .arg(loc(et))
                         .arg(JExpr._null())
-                        .arg(t(et.getVariable().getType()).dotclass())
+                        .arg(t(et.getVariable()).dotclass())
                         .arg(n(et.getVariable()))
                         .arg(visit(et.getExpression()))
                         .arg(visit(et.getStatement()));
@@ -565,7 +565,7 @@ public class Parser {
                         .tap(inv ->
                             tt.getCatches().forEach(ct ->
                                 JExpr._new($CatchExpression)
-                                    .arg(t(ct.getParameter().getType()).dotclass())
+                                    .arg(t(ct.getParameter()).dotclass())
                                     .arg(n(ct.getParameter()))
                                     .arg(visit(ct.getBlock())))
                         );
@@ -674,6 +674,11 @@ public class Parser {
      * Converts a type expression from javac to codemodel.
      */
     private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
+        @Override
+        public JType visitVariable(VariableTree node, Void aVoid) {
+            return t(node.getType());
+        }
+
         @Override
         public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
             JClass base = (JClass)pt.getType().accept(this, __);
