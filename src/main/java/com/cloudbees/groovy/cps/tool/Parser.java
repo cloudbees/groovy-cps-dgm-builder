@@ -32,8 +32,10 @@ import com.sun.source.util.JavacTask;
 import com.sun.source.util.SimpleTreeVisitor;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.api.JavacTool;
+import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
+import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
@@ -242,20 +244,33 @@ public class Parser {
             @Override
             public JExpression visitMethodInvocation(MethodInvocationTree mt, Void __) {
                 ExpressionTree ms = mt.getMethodSelect();
+                JInvocation inv = $b.invoke("functionCall")
+                        .arg(loc(mt));
+
                 if (ms instanceof MemberSelectTree) {
                     MemberSelectTree mst = (MemberSelectTree) ms;
-                    JInvocation inv = $b.invoke("functionCall")
-                            .arg(loc(mt))
-                            .arg(visit(mst.getExpression()))
-                            .arg(JExpr.lit(n(mst.getIdentifier())));
-                    for (ExpressionTree arg : mt.getArguments()) {
-                        inv.arg(visit(arg));
+                    inv
+                        .arg(visit(mst.getExpression()))
+                        .arg(JExpr.lit(n(mst.getIdentifier())));
+                } else
+                if (ms instanceof JCIdent) {
+                    JCIdent it = (JCIdent) ms;
+                    if (!it.sym.owner.toString().equals(DefaultGroovyMethods.class.getName())) {
+                        // TODO: static import
+                        throw new UnsupportedOperationException();
                     }
-                    return inv;
+                    inv
+                        .arg($b.invoke("this_"))
+                        .arg(JExpr.lit(n(it.getName())));
                 } else {
-                    // TODO: figure out what can come here
-                    throw new UnsupportedOperationException();
+                // TODO: figure out what can come here
+                throw new UnsupportedOperationException();
                 }
+
+                for (ExpressionTree arg : mt.getArguments()) {
+                    inv.arg(visit(arg));
+                }
+                return inv;
             }
 
             @Override
