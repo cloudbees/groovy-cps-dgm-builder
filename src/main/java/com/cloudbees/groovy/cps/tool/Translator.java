@@ -6,7 +6,6 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFormatter;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
@@ -14,7 +13,6 @@ import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.FileCodeWriter;
-import com.sun.codemodel.writer.SingleStreamCodeWriter;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
@@ -92,7 +90,6 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.File;
-import java.io.FileWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -142,10 +139,10 @@ public class Translator {
     }
 
     public static void main(String[] args) throws Exception {
-        new Translator().foo(new File("DefaultGroovyMethods.java"));
+        new Translator().translate(new File("DefaultGroovyMethods.java"));
     }
 
-    public void foo(File dgmJava) throws Exception {
+    public void translate(File dgmJava) throws Exception {
         StandardJavaFileManager fileManager = null;
         try {
             JavaCompiler javac1 = JavacTool.create();
