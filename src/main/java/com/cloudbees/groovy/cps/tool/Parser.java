@@ -453,13 +453,19 @@ public class Parser {
 
             @Override
             public JExpression visitNewArray(NewArrayTree nt, Void __) {
-                if (nt.getInitializers()!=null)
-                    throw new UnsupportedOperationException();
-                return $b.invoke("newArray").tap(inv -> {
-                    inv.arg(loc(nt));
-                    inv.arg(t(nt.getType()).dotclass());
-                    nt.getDimensions().stream().forEach( d -> inv.arg(visit(d)));
-                });
+                if (nt.getInitializers()!=null) {
+                    return $b.invoke("newArrayFromInitializers").tap(inv -> {
+                        inv.arg(loc(nt));
+                        inv.arg(t(nt.getType()).dotclass());
+                        nt.getInitializers().forEach(d -> inv.arg(visit(d)));
+                    });
+                } else {
+                    return $b.invoke("newArray").tap(inv -> {
+                        inv.arg(loc(nt));
+                        inv.arg(t(nt.getType()).dotclass());
+                        nt.getDimensions().forEach(d -> inv.arg(visit(d)));
+                    });
+                }
             }
 
             @Override
