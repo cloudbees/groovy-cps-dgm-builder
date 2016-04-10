@@ -20,6 +20,7 @@ import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
@@ -427,10 +428,22 @@ public class Parser {
             @Override
             public JExpression visitForLoop(ForLoopTree ft, Void __) {
                 return $b.invoke("forLoop")
-                        .arg($b.invoke("sequence").tap(inv -> { ft.getInitializer().forEach( i -> inv.arg(visit(i)));}))
+                        .arg(JExpr._null())
+                        .arg($b.invoke("sequence").tap(inv -> ft.getInitializer().forEach(i -> inv.arg(visit(i)))))
                         .arg(visit(ft.getCondition()))
-                        .arg($b.invoke("sequence").tap(inv -> { ft.getUpdate().forEach( i -> inv.arg(visit(i)));}))
+                        .arg($b.invoke("sequence").tap(inv -> ft.getUpdate().forEach(i -> inv.arg(visit(i)))))
                         .arg(visit(ft.getStatement()));
+            }
+
+            @Override
+            public JExpression visitEnhancedForLoop(EnhancedForLoopTree et, Void __) {
+                return $b.invoke("forInLoop")
+                        .arg(loc(et))
+                        .arg(JExpr._null())
+                        .arg(t(et.getVariable().getType()).dotclass())
+                        .arg(n(et.getVariable().getName()))
+                        .arg(visit(et.getExpression()))
+                        .arg(visit(et.getStatement()));
             }
 
             @Override
