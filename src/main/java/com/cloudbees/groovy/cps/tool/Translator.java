@@ -261,7 +261,16 @@ public class Translator {
                             .arg($CpsDefaultGroovyMethods.dotclass())
                             .arg(methodName)
                             .args(params))
-            ))._then()._return($DefaultGroovyMethods.staticInvoke(methodName).args(params));
+            ))._then().tap(blk -> {
+                JInvocation forward = $DefaultGroovyMethods.staticInvoke(methodName).args(params);
+
+                if (e.getReturnType().getKind()==TypeKind.VOID) {
+                    blk.add(forward);
+                    blk._return();
+                } else {
+                    blk._return(forward);
+                }
+            });
         }
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));
