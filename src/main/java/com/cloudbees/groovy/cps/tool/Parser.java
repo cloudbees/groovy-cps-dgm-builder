@@ -96,8 +96,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -173,7 +175,8 @@ public class Parser {
             ClassSymbol dgm = (ClassSymbol) elements.getTypeElement("org.codehaus.groovy.runtime.DefaultGroovyMethods");
             dgm.accept(new ElementScanner7<Void,Void>() {
                 public Void visitExecutable(ExecutableElement e, Void __) {
-                    if (isGdkMethodWithClosureArgument(e)) {
+                    if (isGdkMethodWithClosureArgument(e)
+                     && !EXCLUSIONS.contains(n(e))) {
                         translate(dgmCut, e);
                     }
                     return null;
@@ -599,7 +602,10 @@ public class Parser {
 
             @Override
             public JType visitDeclared(DeclaredType t, Void __) {
-                JClass base = codeModel.ref(n(t.asElement()));
+                String name = n(t.asElement());
+                if (name.isEmpty())
+                    throw new UnsupportedOperationException("Anonymous class: "+t);
+                JClass base = codeModel.ref(name);
                 if (t.getTypeArguments().isEmpty())
                     return base;
 
@@ -729,4 +735,9 @@ public class Parser {
         }
         throw new UnsupportedOperationException(src.toString());
     }
+
+    private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
+            "runAfter", /* use anonymous inner class we can't handle */
+            "accept" /* launches a thread */,
+            "filterLine"    /* anonymous inner classes*/ ));
 }
