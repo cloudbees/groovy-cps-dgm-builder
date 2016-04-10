@@ -331,7 +331,7 @@ public class Parser {
             @Override
             public JExpression visitBlock(BlockTree bt, Void __) {
                 JInvocation inv = $b.invoke("block");
-                bt.getStatements().stream().forEach( s -> inv.arg(visit(s)));
+                bt.getStatements().forEach( s -> inv.arg(visit(s)));
                 return inv;
             }
 
