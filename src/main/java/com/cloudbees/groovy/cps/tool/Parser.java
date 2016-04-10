@@ -235,7 +235,7 @@ public class Parser {
         // parameter names
         f.arg(codeModel.ref(Arrays.class).staticInvoke("asList").tap( inv -> {
             for (VariableElement p : e.getParameters()) {
-                inv.arg(n(p.getSimpleName()));
+                inv.arg(n(p));
             }
         }));
 
@@ -280,11 +280,11 @@ public class Parser {
                     if (!it.sym.owner.toString().equals(DefaultGroovyMethods.class.getName())) {
                         // static import
                         inv.arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
-                           .arg(n(it.getName()));
+                           .arg(n(it));
                     } else {
                         // invocation on this class
                         inv.arg($b.invoke("this_"))
-                           .arg(n(it.getName()));
+                           .arg(n(it));
                     }
                 } else {
                     // TODO: figure out what can come here
@@ -302,7 +302,7 @@ public class Parser {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
                         .arg(t(vt.getType()).dotclass())
-                        .arg(n(vt.getName()))
+                        .arg(n(vt))
                         .arg(visit(vt.getInitializer()));
             }
 
@@ -478,7 +478,7 @@ public class Parser {
                         .arg(loc(et))
                         .arg(JExpr._null())
                         .arg(t(et.getVariable().getType()).dotclass())
-                        .arg(n(et.getVariable().getName()))
+                        .arg(n(et.getVariable()))
                         .arg(visit(et.getExpression()))
                         .arg(visit(et.getStatement()));
             }
@@ -538,7 +538,7 @@ public class Parser {
                             tt.getCatches().forEach(ct ->
                                 JExpr._new($CatchExpression)
                                     .arg(t(ct.getParameter().getType()).dotclass())
-                                    .arg(n(ct.getParameter().getName()))
+                                    .arg(n(ct.getParameter()))
                                     .arg(visit(ct.getBlock())))
                         );
             }
@@ -577,6 +577,12 @@ public class Parser {
     }
     private String n(Name n) {
         return n.toString();
+    }
+    private String n(VariableTree v) {
+        return n(v.getName());
+    }
+    private String n(IdentifierTree v) {
+        return n(v.getName());
     }
 
     protected DiagnosticListener<JavaFileObject> createErrorListener() {
