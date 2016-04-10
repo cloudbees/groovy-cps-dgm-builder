@@ -430,6 +430,7 @@ public class Parser {
                 case GREATER_THAN:          return "greaterThan";
                 case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
+                case POSTFIX_DECREMENT:     return "postfixDec";
                 case LOGICAL_COMPLEMENT:    return "not";
                 case CONDITIONAL_OR:        return "logicalOr";
                 case CONDITIONAL_AND:       return "logicalAnd";
