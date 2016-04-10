@@ -18,6 +18,7 @@ import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.NewClassTree;
@@ -353,6 +354,11 @@ public class Parser {
             @Override
             public JExpression visitExpressionStatement(ExpressionStatementTree et, Void __) {
                 return visit(et.getExpression());
+            }
+
+            @Override
+            public JExpression visitLiteral(LiteralTree lt, Void __) {
+                return JExpr.literal(lt.getValue());
             }
 
             @Override
