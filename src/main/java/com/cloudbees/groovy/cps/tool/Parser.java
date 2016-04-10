@@ -13,6 +13,7 @@ import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
+import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
@@ -36,6 +37,7 @@ import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.TypeCastTree;
+import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.util.JavacTask;
@@ -395,6 +397,15 @@ public class Parser {
             }
 
             @Override
+            public JExpression visitUnary(UnaryTree ut, Void __) {
+                JExpression e = visit(ut.getExpression());
+                switch (ut.getKind()) {
+                case POSTFIX_INCREMENT: return JOp.incr(e);
+                }
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
             public JExpression visitAssignment(AssignmentTree at, Void __) {
                 return $b.invoke("assign")
                         .arg(loc(at))
@@ -420,6 +431,14 @@ public class Parser {
                         .arg(visit(ft.getCondition()))
                         .arg($b.invoke("sequence").tap(inv -> { ft.getUpdate().forEach( i -> inv.arg(visit(i)));}))
                         .arg(visit(ft.getStatement()));
+            }
+
+            @Override
+            public JExpression visitArrayAccess(ArrayAccessTree at, Void __) {
+                return $b.invoke("array")
+                        .arg(loc(at))
+                        .arg(visit(at.getExpression()))
+                        .arg(visit(at.getIndex()));
             }
 
             @Override
