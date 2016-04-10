@@ -752,7 +752,9 @@ public class Translator {
     private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
             "runAfter", /* use anonymous inner class we can't handle */
             "accept" /* launches a thread */,
-            "filterLine"    /* anonymous inner classes*/ ));
+            "filterLine",    /* anonymous inner classes */
+            "dropWhile","takeWhile" /* TODO: translate inner classes to support this*/
+    ));
 
     private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
         protected JType visit(Tree t) {
