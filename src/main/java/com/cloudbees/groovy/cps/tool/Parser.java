@@ -310,9 +310,7 @@ public class Parser {
                     throw new UnsupportedOperationException(ms.toString());
                 }
 
-                for (ExpressionTree arg : mt.getArguments()) {
-                    inv.arg(visit(arg));
-                }
+                mt.getArguments().forEach( a -> inv.arg(visit(a)) );
                 return inv;
             }
 
@@ -398,9 +396,7 @@ public class Parser {
                 return $b.invoke("new_").tap(inv -> {
                     inv.arg(loc(nt));
                     inv.arg(t(((JCTree) nt).type).dotclass());
-                    for (ExpressionTree et : nt.getArguments()) {
-                        inv.arg(visit(et));
-                    }
+                    nt.getArguments().forEach( et -> inv.arg(visit(et)) );
                 });
             }
 
