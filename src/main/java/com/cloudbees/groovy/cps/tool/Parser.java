@@ -17,6 +17,7 @@ import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.BreakTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.EnhancedForLoopTree;
@@ -405,6 +406,8 @@ public class Parser {
             private String opName(Kind kind) {
                 switch (kind) {
                 case EQUAL_TO:              return "compareEqual";
+                case LESS_THAN_EQUAL:       return "lessThanEqual";
+                case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
                 case LOGICAL_COMPLEMENT:    return "not";
                 }
@@ -457,6 +460,13 @@ public class Parser {
                         .arg(loc(at))
                         .arg(visit(at.getExpression()))
                         .arg(visit(at.getIndex()));
+            }
+
+            @Override
+            public JExpression visitBreak(BreakTree node, Void __) {
+                if (node.getLabel()!=null)
+                    throw new UnsupportedOperationException();
+                return $b.invoke("break_").arg(JExpr._null());
             }
 
             @Override
