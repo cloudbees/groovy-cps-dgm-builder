@@ -291,7 +291,7 @@ public class Parser {
                     MemberSelectTree mst = (MemberSelectTree) ms;
                     inv
                         .arg(visit(mst.getExpression()))
-                        .arg(JExpr.lit(n(mst.getIdentifier())));
+                        .arg(n(mst.getIdentifier()));
                 } else
                 if (ms instanceof JCIdent) {
                     // invocation without object selection, like  foo(bar,zot)
