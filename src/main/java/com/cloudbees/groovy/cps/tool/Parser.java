@@ -267,14 +267,17 @@ public class Parser {
                         .arg(JExpr.lit(n(mst.getIdentifier())));
                 } else
                 if (ms instanceof JCIdent) {
+                    // invocation without object selection, like  foo(bar,zot)
                     JCIdent it = (JCIdent) ms;
                     if (!it.sym.owner.toString().equals(DefaultGroovyMethods.class.getName())) {
-                        // TODO: static import
-                        throw new UnsupportedOperationException();
+                        // static import
+                        inv.arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
+                           .arg(n(it.getName()));
+                    } else {
+                        // invocation on this class
+                        inv.arg($b.invoke("this_"))
+                           .arg(n(it.getName()));
                     }
-                    inv
-                        .arg($b.invoke("this_"))
-                        .arg(JExpr.lit(n(it.getName())));
                 } else {
                     // TODO: figure out what can come here
                     throw new UnsupportedOperationException(ms.toString());
