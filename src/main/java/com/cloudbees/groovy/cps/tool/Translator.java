@@ -264,7 +264,7 @@ public class Translator {
             ))._then().tap(blk -> {
                 JInvocation forward = $DefaultGroovyMethods.staticInvoke(methodName).args(params);
 
-                if (e.getReturnType().getKind()==TypeKind.VOID) {
+                if (e.getReturnType().getKind() == TypeKind.VOID) {
                     blk.add(forward);
                     blk._return();
                 } else {
@@ -611,58 +611,7 @@ public class Translator {
      * Convert a type representation from javac to codemodel.
      */
     private JType t(Tree t) {
-        return t.accept(new SimpleTreeVisitor<JType, Void>() {
-            @Override
-            public JType visitVariable(VariableTree node, Void __) {
-                return t(node.getType());
-            }
-
-            @Override
-            public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
-                JClass base = (JClass)pt.getType().accept(this, __);
-                List<JClass> args = new ArrayList<>();
-                for (Tree arg : pt.getTypeArguments()) {
-                    args.add((JClass)arg.accept(this,__));
-                }
-                return base.narrow(args);
-            }
-
-            @Override
-            public JType visitIdentifier(IdentifierTree it, Void __) {
-                JCIdent idt = (JCIdent) it;
-                return codeModel.ref(idt.sym.toString());
-            }
-
-            @Override
-            public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
-                return primitive(pt, pt.getPrimitiveTypeKind());
-            }
-
-            @Override
-            public JType visitArrayType(ArrayTypeTree at, Void __) {
-                return visit(at.getType(),__).array();
-            }
-
-            /**
-             * Nested type
-             */
-            @Override
-            public JType visitMemberSelect(MemberSelectTree mt, Void __) {
-                return t(((JCFieldAccess)mt).type);
-            }
-
-            @Override
-            public JType visitWildcard(WildcardTree wt, Void __) {
-                Tree b = wt.getBound();
-                if (b==null)    return codeModel.wildcard();
-                else            return t(b).boxify().wildcard();
-            }
-
-            @Override
-            protected JType defaultAction(Tree node, Void __) {
-                throw new UnsupportedOperationException(node.toString());
-            }
-        }, null);
+        return t.accept(new TypeTranslator(), null);
     }
 
     private JType t(TypeMirror m) {
@@ -764,4 +713,61 @@ public class Translator {
             "runAfter", /* use anonymous inner class we can't handle */
             "accept" /* launches a thread */,
             "filterLine"    /* anonymous inner classes*/ ));
+
+    private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
+        private JType visit(Tree t) {
+            return visit(t,null);
+        }
+
+        @Override
+        public JType visitVariable(VariableTree node, Void __) {
+            return visit(node.getType());
+        }
+
+        @Override
+        public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
+            JClass base = (JClass)visit(pt.getType());
+            List<JClass> args = new ArrayList<>();
+            for (Tree arg : pt.getTypeArguments()) {
+                args.add((JClass)visit(arg));
+            }
+            return base.narrow(args);
+        }
+
+        @Override
+        public JType visitIdentifier(IdentifierTree it, Void __) {
+            JCIdent idt = (JCIdent) it;
+            return codeModel.ref(idt.sym.toString());
+        }
+
+        @Override
+        public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
+            return primitive(pt, pt.getPrimitiveTypeKind());
+        }
+
+        @Override
+        public JType visitArrayType(ArrayTypeTree at, Void __) {
+            return visit(at.getType()).array();
+        }
+
+        /**
+         * Nested type
+         */
+        @Override
+        public JType visitMemberSelect(MemberSelectTree mt, Void __) {
+            return t(((JCFieldAccess)mt).type);
+        }
+
+        @Override
+        public JType visitWildcard(WildcardTree wt, Void __) {
+            Tree b = wt.getBound();
+            if (b==null)    return codeModel.wildcard();
+            else            return visit(b).boxify().wildcard();
+        }
+
+        @Override
+        protected JType defaultAction(Tree node, Void __) {
+            throw new UnsupportedOperationException(node.toString());
+        }
+    }
 }
