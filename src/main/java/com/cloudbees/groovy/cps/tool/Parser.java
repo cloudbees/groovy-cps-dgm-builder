@@ -42,6 +42,7 @@ import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
+import com.sun.source.tree.TryTree;
 import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
@@ -108,6 +109,7 @@ public class Parser {
     private final JClass $CpsFunction;
     private final JClass $CpsCallableInvocation;
     private final JClass $Builder;
+    private final JClass $CatchExpression;
 
     public Parser() {
         try {
@@ -119,6 +121,7 @@ public class Parser {
         $CpsFunction           = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsFunction");
         $CpsCallableInvocation = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsCallableInvocation");
         $Builder               = codeModel.ref("com.cloudbees.groovy.cps.Builder");
+        $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
     }
 
     public static void main(String[] args) throws Exception {
@@ -524,6 +527,20 @@ public class Parser {
                         .arg(visit(ct.getCondition()))
                         .arg(visit(ct.getTrueExpression()))
                         .arg(visit(ct.getFalseExpression()));
+            }
+
+            @Override
+            public JExpression visitTry(TryTree tt, Void __) {
+                return $b.invoke("tryCatch")
+                        .arg(visit(tt.getBlock()))
+                        .arg(visit(tt.getFinallyBlock()))
+                        .tap(inv ->
+                            tt.getCatches().forEach(ct ->
+                                JExpr._new($CatchExpression)
+                                    .arg(t(ct.getParameter().getType()).dotclass())
+                                    .arg(n(ct.getParameter().getName()))
+                                    .arg(visit(ct.getBlock())))
+                        );
             }
 
             @Override
