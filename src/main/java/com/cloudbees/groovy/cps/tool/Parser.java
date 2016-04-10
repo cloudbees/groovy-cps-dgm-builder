@@ -426,6 +426,8 @@ public class Parser {
                 case NOT_EQUAL_TO:          return "compareNotEqual";
                 case LESS_THAN_EQUAL:       return "lessThanEqual";
                 case LESS_THAN:             return "lessThan";
+                case GREATER_THAN_EQUAL:    return "greaterThanEqual";
+                case GREATER_THAN:          return "greaterThan";
                 case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
                 case LOGICAL_COMPLEMENT:    return "not";
