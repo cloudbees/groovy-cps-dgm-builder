@@ -18,6 +18,7 @@ import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.IfTree;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
@@ -333,6 +334,17 @@ public class Parser {
                         .arg(visit(tt.getExpression()))
                         .arg(t(tt.getType()).dotclass())
                         .arg(JExpr.lit(false));
+            }
+
+
+            @Override
+            public JExpression visitIf(IfTree it, Void __) {
+                JInvocation inv = $b.invoke("if_")
+                        .arg(visit(it.getCondition()))
+                        .arg(visit(it.getThenStatement()));
+                if (it.getElseStatement()!=null)
+                    inv.arg(visit(it.getElseStatement()));
+                return inv;
             }
 
             @Override
