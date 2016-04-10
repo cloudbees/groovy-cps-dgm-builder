@@ -417,6 +417,9 @@ public class Parser {
                 case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
                 case LOGICAL_COMPLEMENT:    return "not";
+                case CONDITIONAL_OR:        return "logicalOr";
+                case CONDITIONAL_AND:       return "logicalAnd";
+                case PLUS:                  return "plus";
                 }
                 throw new UnsupportedOperationException(kind.toString());
             }
