@@ -73,12 +73,14 @@ import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.NoType;
 import javax.lang.model.type.PrimitiveType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
+import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.ElementScanner7;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.SimpleTypeVisitor6;
@@ -614,7 +616,23 @@ public class Parser {
 
             @Override
             public JType visitNoType(NoType t, Void __) {
-                return primitive(t,t.getKind());
+                return primitive(t, t.getKind());
+            }
+
+            @Override
+            public JType visitArray(ArrayType t, Void __) {
+                return t(t.getComponentType()).array();
+            }
+
+            @Override
+            public JType visitWildcard(WildcardType t, Void aVoid) {
+                if (t.getExtendsBound()!=null) {
+                    return t(t.getExtendsBound()).boxify().wildcard();
+                }
+                if (t.getSuperBound()!=null) {
+                    throw new UnsupportedOperationException();
+                }
+                return codeModel.wildcard();
             }
 
             @Override
