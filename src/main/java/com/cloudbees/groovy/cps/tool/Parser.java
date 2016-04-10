@@ -13,6 +13,7 @@ import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
+import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
@@ -282,7 +283,7 @@ public class Parser {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(erasure(vt.getType()).dotclass())
+                        .arg(t(vt.getType()).dotclass())
                         .arg(n(vt.getName()))
                         .arg(visit(vt.getInitializer()));
             }
@@ -422,36 +423,6 @@ public class Parser {
         return t.accept(new TypeTranslator(), null);
     }
 
-    private JType erasure(Tree t) {
-        return t.accept(new TypeTranslator() {
-            @Override
-            public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
-                return pt.getType().accept(this, __);
-            }
-
-            @Override
-            public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
-                switch (pt.getPrimitiveTypeKind()) {
-                case BOOLEAN:   return codeModel.INT;
-                case BYTE:      return codeModel.BYTE;
-                case SHORT:     return codeModel.SHORT;
-                case INT:       return codeModel.INT;
-                case LONG:      return codeModel.LONG;
-                case CHAR:      return codeModel.CHAR;
-                case FLOAT:     return codeModel.FLOAT;
-                case DOUBLE:    return codeModel.DOUBLE;
-                case VOID:      return codeModel.VOID;
-                }
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            protected JType defaultAction(Tree node, Void aVoid) {
-                throw new UnsupportedOperationException();
-            }
-        }, null);
-    }
-
     private JType t(TypeMirror m) {
         if (m.getKind().isPrimitive())
             return JType.parse(codeModel,m.toString());
@@ -492,6 +463,32 @@ public class Parser {
         public JType visitIdentifier(IdentifierTree it, Void __) {
             JCIdent idt = (JCIdent) it;
             return t(idt.sym.asType());
+        }
+
+        @Override
+        public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
+            switch (pt.getPrimitiveTypeKind()) {
+            case BOOLEAN:   return codeModel.INT;
+            case BYTE:      return codeModel.BYTE;
+            case SHORT:     return codeModel.SHORT;
+            case INT:       return codeModel.INT;
+            case LONG:      return codeModel.LONG;
+            case CHAR:      return codeModel.CHAR;
+            case FLOAT:     return codeModel.FLOAT;
+            case DOUBLE:    return codeModel.DOUBLE;
+            case VOID:      return codeModel.VOID;
+            }
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public JType visitArrayType(ArrayTypeTree at, Void __) {
+            return visit(at.getType(),__).array();
+        }
+
+        @Override
+        protected JType defaultAction(Tree node, Void aVoid) {
+            throw new UnsupportedOperationException();
         }
     }
 }
