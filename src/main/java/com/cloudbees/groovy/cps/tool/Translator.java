@@ -200,6 +200,18 @@ public class Translator {
                             .anyMatch(p -> types.isAssignable(p.asType(), closureType));
                 }
             },null);
+
+            /*
+                private static MethodLocation loc(String methodName) {
+                    return new MethodLocation(CpsDefaultGroovyMethods.class,methodName);
+                }
+            */
+
+            JClass $MethodLocation = codeModel.ref("com.cloudbees.groovy.cps.MethodLocation");
+            $CpsDefaultGroovyMethods.method(JMod.PRIVATE|JMod.STATIC, $MethodLocation, "loc").tap( m -> {
+                JVar $methodName = m.param(String.class, "methodName");
+                m.body()._return(JExpr._new($MethodLocation).arg($CpsDefaultGroovyMethods.dotclass()).arg($methodName));
+            });
         } finally {
             if (fileManager!=null)
                 fileManager.close();
