@@ -9,6 +9,7 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
@@ -121,6 +122,7 @@ public class Parser {
     private final JClass $CpsCallableInvocation;
     private final JClass $Builder;
     private final JClass $CatchExpression;
+    private final JClass $DefaultGroovyMethods;
 
     public Parser() {
         try {
@@ -133,6 +135,7 @@ public class Parser {
         $CpsCallableInvocation = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsCallableInvocation");
         $Builder               = codeModel.ref("com.cloudbees.groovy.cps.Builder");
         $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
+        $DefaultGroovyMethods  = codeModel.ref("org.codehaus.groovy.runtime.DefaultGroovyMethods");
     }
 
     public static void main(String[] args) throws Exception {
@@ -221,7 +224,8 @@ public class Parser {
      *      Method in {@link DefaultGroovyMethods} to translate.
      */
     private void translate(final CompilationUnitTree cut, ExecutableElement e) {
-        JMethod m = $CpsDefaultGroovyMethods.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), n(e));
+        String methodName = n(e);
+        JMethod m = $CpsDefaultGroovyMethods.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
         for (TypeParameterElement p : e.getTypeParameters()) {
             m.generify(n(p));   // TODO: bound
         }
@@ -230,16 +234,23 @@ public class Parser {
             params.add(m.param(t(p.asType()), n(p)));
         }
 
-        // TODO: preamble
-//        m.body()._if(JOp.cand(
-//            JOp.not($Caller.staticInvoke("isAsynchronous").arg()),
-//            JOp.not($Caller.staticInvoke("isAsynchronous")
-//                    .arg($CpsDefaultGroovyMethods.dotclass())
-//                    .arg(n(e)))
-//                )
-//
-//        )
-
+        {// preamble
+            /*
+                If the call to this method happen outside CPS code, execute normally via DefaultGroovyMethods
+             */
+            m.body()._if(JOp.cand(
+                    JOp.not($Caller.staticInvoke("isAsynchronous").tap(inv -> {
+                        inv.arg(params.get(0));
+                        inv.arg(methodName);
+                        for (int i = 1; i < params.size(); i++)
+                            inv.arg(params.get(i));
+                    })),
+                    JOp.not($Caller.staticInvoke("isAsynchronous")
+                            .arg($CpsDefaultGroovyMethods.dotclass())
+                            .arg(methodName)
+                            .args(params))
+            ))._then()._return($DefaultGroovyMethods.staticInvoke(methodName).args(params));
+        }
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg("each")));
         JInvocation f = JExpr._new($CpsFunction);
@@ -602,7 +613,7 @@ public class Parser {
 
             @Override
             public JType visitDeclared(DeclaredType t, Void __) {
-                String name = n(((TypeElement)t.asElement()).getQualifiedName());
+                String name = n(((TypeElement) t.asElement()).getQualifiedName());
                 if (name.isEmpty())
                     throw new UnsupportedOperationException("Anonymous class: "+t);
                 JClass base = codeModel.ref(name);
