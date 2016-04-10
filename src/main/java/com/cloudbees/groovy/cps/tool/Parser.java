@@ -22,6 +22,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.ConditionalExpressionTree;
+import com.sun.source.tree.ContinueTree;
 import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
@@ -502,6 +503,13 @@ public class Parser {
                 if (node.getLabel()!=null)
                     throw new UnsupportedOperationException();
                 return $b.invoke("break_").arg(JExpr._null());
+            }
+
+            @Override
+            public JExpression visitContinue(ContinueTree node, Void aVoid) {
+                if (node.getLabel()!=null)
+                    throw new UnsupportedOperationException();
+                return $b.invoke("continue_").arg(JExpr._null());
             }
 
             @Override
