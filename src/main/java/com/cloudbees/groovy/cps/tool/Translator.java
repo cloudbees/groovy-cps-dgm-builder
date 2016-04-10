@@ -430,7 +430,7 @@ public class Translator {
 
             @Override
             public JExpression visitLiteral(LiteralTree lt, Void __) {
-                return JExpr.literal(lt.getValue());
+                return $b.invoke("constant").arg(JExpr.literal(lt.getValue()));
             }
 
             @Override
