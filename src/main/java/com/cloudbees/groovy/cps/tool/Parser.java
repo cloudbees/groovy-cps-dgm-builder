@@ -402,7 +402,8 @@ public class Parser {
             public JExpression visitUnary(UnaryTree ut, Void __) {
                 JExpression e = visit(ut.getExpression());
                 switch (ut.getKind()) {
-                case POSTFIX_INCREMENT: return JOp.incr(e);
+                case POSTFIX_INCREMENT:     return JOp.incr(e);
+                case LOGICAL_COMPLEMENT:    return JOp.not(e);
                 }
                 throw new UnsupportedOperationException(ut.toString());
             }
