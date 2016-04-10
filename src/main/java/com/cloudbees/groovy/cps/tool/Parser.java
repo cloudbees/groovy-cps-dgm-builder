@@ -70,12 +70,18 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
+import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.NoType;
+import javax.lang.model.type.PrimitiveType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.ElementScanner7;
 import javax.lang.model.util.Elements;
+import javax.lang.model.util.SimpleTypeVisitor6;
 import javax.lang.model.util.Types;
 import javax.tools.DiagnosticListener;
 import javax.tools.JavaCompiler;
@@ -331,7 +337,7 @@ public class Parser {
             @Override
             public JExpression visitBlock(BlockTree bt, Void __) {
                 JInvocation inv = $b.invoke("block");
-                bt.getStatements().forEach( s -> inv.arg(visit(s)));
+                bt.getStatements().forEach(s -> inv.arg(visit(s)));
                 return inv;
             }
 
@@ -583,7 +589,39 @@ public class Parser {
     private JType t(TypeMirror m) {
         if (m.getKind().isPrimitive())
             return JType.parse(codeModel,m.toString());
-        return codeModel.directClass(m.toString());
+        return m.accept(new SimpleTypeVisitor6<JType, Void>() {
+            @Override
+            public JType visitPrimitive(PrimitiveType t, Void __) {
+                return primitive(t, t.getKind());
+            }
+
+            @Override
+            public JType visitDeclared(DeclaredType t, Void __) {
+                JClass base = codeModel.ref(n(t.asElement()));
+                if (t.getTypeArguments().isEmpty())
+                    return base;
+
+                List<JClass> typeArgs = new ArrayList<>();
+                t.getTypeArguments().forEach( a -> typeArgs.add((JClass)t(a)));
+                return base.narrow(typeArgs);
+            }
+
+            @Override
+            public JType visitTypeVariable(TypeVariable t, Void __) {
+                // handling this correctly requires us tracking JTypeVar
+                return t(t.getUpperBound());
+            }
+
+            @Override
+            public JType visitNoType(NoType t, Void __) {
+                return primitive(t,t.getKind());
+            }
+
+            @Override
+            protected JType defaultAction(TypeMirror e, Void __) {
+                throw new UnsupportedOperationException(e.toString());
+            }
+        }, null);
     }
 
     private String n(Element e) {
@@ -630,18 +668,7 @@ public class Parser {
 
         @Override
         public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
-            switch (pt.getPrimitiveTypeKind()) {
-            case BOOLEAN:   return codeModel.INT;
-            case BYTE:      return codeModel.BYTE;
-            case SHORT:     return codeModel.SHORT;
-            case INT:       return codeModel.INT;
-            case LONG:      return codeModel.LONG;
-            case CHAR:      return codeModel.CHAR;
-            case FLOAT:     return codeModel.FLOAT;
-            case DOUBLE:    return codeModel.DOUBLE;
-            case VOID:      return codeModel.VOID;
-            }
-            throw new UnsupportedOperationException(pt.toString());
+            return primitive(pt, pt.getPrimitiveTypeKind());
         }
 
         @Override
@@ -668,5 +695,20 @@ public class Parser {
         protected JType defaultAction(Tree node, Void aVoid) {
             throw new UnsupportedOperationException(node.toString());
         }
+    }
+
+    private JType primitive(Object src, TypeKind k) {
+        switch (k) {
+        case BOOLEAN:   return codeModel.INT;
+        case BYTE:      return codeModel.BYTE;
+        case SHORT:     return codeModel.SHORT;
+        case INT:       return codeModel.INT;
+        case LONG:      return codeModel.LONG;
+        case CHAR:      return codeModel.CHAR;
+        case FLOAT:     return codeModel.FLOAT;
+        case DOUBLE:    return codeModel.DOUBLE;
+        case VOID:      return codeModel.VOID;
+        }
+        throw new UnsupportedOperationException(src.toString());
     }
 }
