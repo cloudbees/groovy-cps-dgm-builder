@@ -26,6 +26,7 @@ import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.IfTree;
+import com.sun.source.tree.InstanceOfTree;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
@@ -467,6 +468,14 @@ public class Parser {
                 if (node.getLabel()!=null)
                     throw new UnsupportedOperationException();
                 return $b.invoke("break_").arg(JExpr._null());
+            }
+
+            @Override
+            public JExpression visitInstanceOf(InstanceOfTree it, Void __) {
+                return $b.invoke("instanceOf")
+                        .arg(loc(it))
+                        .arg(visit(it.getExpression()))
+                        .arg($b.invoke("constant").arg(t(it.getType()).dotclass()));
             }
 
             @Override
