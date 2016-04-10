@@ -23,6 +23,7 @@ import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
+import com.sun.source.tree.PrimitiveTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
@@ -33,10 +34,8 @@ import com.sun.source.util.JavacTask;
 import com.sun.source.util.SimpleTreeVisitor;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.api.JavacTool;
-import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
-import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
@@ -389,6 +388,27 @@ public class Parser {
             @Override
             public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
                 return pt.getType().accept(this, __);
+            }
+
+            @Override
+            public JType visitPrimitiveType(PrimitiveTypeTree pt, Void aVoid) {
+                switch (pt.getPrimitiveTypeKind()) {
+                case BOOLEAN:   return codeModel.INT;
+                case BYTE:      return codeModel.BYTE;
+                case SHORT:     return codeModel.SHORT;
+                case INT:       return codeModel.INT;
+                case LONG:      return codeModel.LONG;
+                case CHAR:      return codeModel.CHAR;
+                case FLOAT:     return codeModel.FLOAT;
+                case DOUBLE:    return codeModel.DOUBLE;
+                case VOID:      return codeModel.VOID;
+                }
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            protected JType defaultAction(Tree node, Void aVoid) {
+                throw new UnsupportedOperationException();
             }
         }, null);
     }
