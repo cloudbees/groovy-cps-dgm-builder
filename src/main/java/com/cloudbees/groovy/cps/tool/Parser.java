@@ -208,11 +208,11 @@ public class Parser {
         JInvocation f = JExpr._new($CpsFunction);
 
         // parameter names
-        JInvocation paramNames = codeModel.ref(Arrays.class).staticInvoke("asList");
-        for (VariableElement p : e.getParameters()) {
-            paramNames.arg(n(p.getSimpleName()));
-        }
-        f.arg(paramNames);
+        f.arg(codeModel.ref(Arrays.class).staticInvoke("asList").tap( inv -> {
+            for (VariableElement p : e.getParameters()) {
+                inv.arg(n(p.getSimpleName()));
+            }
+        }));
 
         // translate the method body into an expression that invokes Builder
         f.arg(trees.getTree(e).getBody().accept(new SimpleTreeVisitor<JExpression,Void>() {
@@ -330,12 +330,13 @@ public class Parser {
         }, null));
 
         JVar $f = m.body().decl($CpsFunction, "f", f);
-        m.body()._throw(appendArgs(JExpr._new($CpsCallableInvocation).arg($f).arg(JExpr._null()), params));
-    }
-
-    private JExpression appendArgs(JInvocation inv, List<JVar> params) {
-        params.stream().forEach(inv::arg);
-        return inv;
+        m.body()._throw(JExpr._new($CpsCallableInvocation).tap(inv -> {
+            inv.arg($f);
+            inv.arg(JExpr._null());
+            for (JVar p : params) {
+                inv.arg(p);
+            }
+        }));
     }
 
     /**
