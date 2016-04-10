@@ -50,6 +50,7 @@ import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import groovy.lang.Closure;
 import groovy.lang.GroovyShell;
@@ -538,6 +539,14 @@ public class Parser {
         @Override
         public JType visitArrayType(ArrayTypeTree at, Void __) {
             return visit(at.getType(),__).array();
+        }
+
+        /**
+         * Nested type
+         */
+        @Override
+        public JType visitMemberSelect(MemberSelectTree mt, Void __) {
+            return t(((JCFieldAccess)mt).type);
         }
 
         @Override
