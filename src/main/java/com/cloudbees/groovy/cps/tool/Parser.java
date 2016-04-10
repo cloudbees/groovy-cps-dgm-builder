@@ -20,6 +20,7 @@ import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
@@ -35,6 +36,7 @@ import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import groovy.lang.Closure;
 import groovy.lang.GroovyShell;
@@ -316,6 +318,21 @@ public class Parser {
                         .arg(visit(tt.getExpression()))
                         .arg(t(tt.getType()).dotclass())
                         .arg(JExpr.lit(false));
+            }
+
+            @Override
+            public JExpression visitNewClass(NewClassTree nt, Void __) {
+                // TODO: outer class
+                if (nt.getEnclosingExpression()!=null)
+                    throw new UnsupportedOperationException();
+
+                return $b.invoke("new_").tap(inv -> {
+                    inv.arg(loc(nt));
+                    inv.arg(t(((JCTree) nt).type).dotclass());
+                    for (ExpressionTree et : nt.getArguments()) {
+                        inv.arg(visit(et));
+                    }
+                });
             }
 
             @Override
