@@ -248,6 +248,8 @@ public class Translator {
         List<JVar> params = new ArrayList<>();
         e.getParameters().forEach(p -> params.add(m.param(t(p.asType()), n(p))));
 
+        e.getThrownTypes().forEach( ex -> m._throws((JClass)t(ex)) );
+
         {// preamble
             /*
                 If the call to this method happen outside CPS code, execute normally via DefaultGroovyMethods
