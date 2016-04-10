@@ -9,9 +9,12 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
+import com.sun.source.tree.AssignmentTree;
+import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
@@ -376,6 +379,24 @@ public class Parser {
             @Override
             public JExpression visitParenthesized(ParenthesizedTree pt, Void __) {
                 return visit(pt.getExpression());
+            }
+
+            @Override
+            public JExpression visitBinary(BinaryTree bt, Void __) {
+                JExpression lhs = visit(bt.getLeftOperand());
+                JExpression rhs = visit(bt.getRightOperand());
+                switch (bt.getKind()) {
+                case EQUAL_TO:      return JOp.eq(lhs,rhs);
+                }
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public JExpression visitAssignment(AssignmentTree at, Void __) {
+                return $b.invoke("assign")
+                        .arg(loc(at))
+                        .arg(visit(at.getVariable()))
+                        .arg(visit(at.getExpression()));
             }
 
             @Override
