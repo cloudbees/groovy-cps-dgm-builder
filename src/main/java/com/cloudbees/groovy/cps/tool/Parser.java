@@ -24,6 +24,7 @@ import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
+import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.PrimitiveTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
@@ -370,6 +371,11 @@ public class Parser {
             @Override
             public JExpression visitLiteral(LiteralTree lt, Void __) {
                 return JExpr.literal(lt.getValue());
+            }
+
+            @Override
+            public JExpression visitParenthesized(ParenthesizedTree pt, Void __) {
+                return visit(pt.getExpression());
             }
 
             @Override
