@@ -20,6 +20,7 @@ import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.BreakTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.DoWhileLoopTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
@@ -410,6 +411,14 @@ public class Parser {
                         .arg(visit(ut.getExpression()));
             }
 
+            @Override
+            public JExpression visitCompoundAssignment(CompoundAssignmentTree ct, Void __) {
+                return $b.invoke(opName(ct.getKind()))
+                        .arg(loc(ct))
+                        .arg(visit(ct.getVariable()))
+                        .arg(visit(ct.getExpression()));
+            }
+
             private String opName(Kind kind) {
                 switch (kind) {
                 case EQUAL_TO:              return "compareEqual";
@@ -421,6 +430,7 @@ public class Parser {
                 case CONDITIONAL_OR:        return "logicalOr";
                 case CONDITIONAL_AND:       return "logicalAnd";
                 case PLUS:                  return "plus";
+                case PLUS_ASSIGNMENT:       return "plusEqual";
                 }
                 throw new UnsupportedOperationException(kind.toString());
             }
