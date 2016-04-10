@@ -226,13 +226,11 @@ public class Parser {
     private void translate(final CompilationUnitTree cut, ExecutableElement e) {
         String methodName = n(e);
         JMethod m = $CpsDefaultGroovyMethods.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
-        for (TypeParameterElement p : e.getTypeParameters()) {
-            m.generify(n(p));   // TODO: bound
-        }
+
+        e.getTypeParameters().forEach( p -> m.generify(n(p)));  // TODO: bound
+
         List<JVar> params = new ArrayList<>();
-        for (VariableElement p : e.getParameters()) {
-            params.add(m.param(t(p.asType()), n(p)));
-        }
+        e.getParameters().forEach(p -> params.add(m.param(t(p.asType()), n(p))));
 
         {// preamble
             /*
@@ -257,9 +255,7 @@ public class Parser {
 
         // parameter names
         f.arg(codeModel.ref(Arrays.class).staticInvoke("asList").tap( inv -> {
-            for (VariableElement p : e.getParameters()) {
-                inv.arg(n(p));
-            }
+            e.getParameters().forEach( p -> inv.arg(n(p)) );
         }));
 
         // translate the method body into an expression that invokes Builder
@@ -586,13 +582,10 @@ public class Parser {
         }, null));
 
         JVar $f = m.body().decl($CpsFunction, "f", f);
-        m.body()._throw(JExpr._new($CpsCallableInvocation).tap(inv -> {
-            inv.arg($f);
-            inv.arg(JExpr._null());
-            for (JVar p : params) {
-                inv.arg(p);
-            }
-        }));
+        m.body()._throw(JExpr._new($CpsCallableInvocation)
+            .arg($f)
+            .arg(JExpr._null())
+            .args(params));
     }
 
     /**
