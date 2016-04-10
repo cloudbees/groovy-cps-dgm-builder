@@ -26,6 +26,7 @@ import com.sun.source.tree.IfTree;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ParenthesizedTree;
@@ -398,6 +399,17 @@ public class Parser {
                         .arg(loc(at))
                         .arg(visit(at.getVariable()))
                         .arg(visit(at.getExpression()));
+            }
+
+            @Override
+            public JExpression visitNewArray(NewArrayTree nt, Void __) {
+                if (nt.getInitializers()!=null)
+                    throw new UnsupportedOperationException();
+                return $b.invoke("newArray").tap(inv -> {
+                    inv.arg(loc(nt));
+                    inv.arg(t(nt.getType()).dotclass());
+                    nt.getDimensions().stream().forEach( d -> inv.arg(visit(d)));
+                });
             }
 
             @Override
