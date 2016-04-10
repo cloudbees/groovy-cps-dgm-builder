@@ -9,7 +9,6 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import com.sun.codemodel.writer.SingleStreamCodeWriter;
@@ -390,22 +389,26 @@ public class Parser {
 
             @Override
             public JExpression visitBinary(BinaryTree bt, Void __) {
-                JExpression lhs = visit(bt.getLeftOperand());
-                JExpression rhs = visit(bt.getRightOperand());
-                switch (bt.getKind()) {
-                case EQUAL_TO:      return JOp.eq(lhs,rhs);
-                }
-                throw new UnsupportedOperationException(bt.toString());
+                return $b.invoke(opName(bt.getKind()))
+                        .arg(loc(bt))
+                        .arg(visit(bt.getLeftOperand()))
+                        .arg(visit(bt.getRightOperand()));
             }
 
             @Override
             public JExpression visitUnary(UnaryTree ut, Void __) {
-                JExpression e = visit(ut.getExpression());
-                switch (ut.getKind()) {
-                case POSTFIX_INCREMENT:     return JOp.incr(e);
-                case LOGICAL_COMPLEMENT:    return JOp.not(e);
+                return $b.invoke(opName(ut.getKind()))
+                        .arg(loc(ut))
+                        .arg(visit(ut.getExpression()));
+            }
+
+            private String opName(Kind kind) {
+                switch (kind) {
+                case EQUAL_TO:              return "compareEqual";
+                case POSTFIX_INCREMENT:     return "postfixInc";
+                case LOGICAL_COMPLEMENT:    return "not";
                 }
-                throw new UnsupportedOperationException(ut.toString());
+                throw new UnsupportedOperationException(kind.toString());
             }
 
             @Override
