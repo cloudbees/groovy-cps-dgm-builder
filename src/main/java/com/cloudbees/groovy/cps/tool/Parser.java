@@ -36,6 +36,7 @@ import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.PrimitiveTypeTree;
 import com.sun.source.tree.ReturnTree;
+import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.TypeCastTree;
@@ -411,6 +412,7 @@ public class Parser {
             private String opName(Kind kind) {
                 switch (kind) {
                 case EQUAL_TO:              return "compareEqual";
+                case NOT_EQUAL_TO:          return "compareNotEqual";
                 case LESS_THAN_EQUAL:       return "lessThanEqual";
                 case PREFIX_INCREMENT:      return "prefixInc";
                 case POSTFIX_INCREMENT:     return "postfixInc";
@@ -480,6 +482,13 @@ public class Parser {
                         .arg(loc(it))
                         .arg(visit(it.getExpression()))
                         .arg($b.invoke("constant").arg(t(it.getType()).dotclass()));
+            }
+
+            @Override
+            public JExpression visitThrow(ThrowTree tt, Void __) {
+                return $b.invoke("throw_")
+                        .arg(loc(tt))
+                        .arg(visit(tt.getExpression()));
             }
 
             @Override
