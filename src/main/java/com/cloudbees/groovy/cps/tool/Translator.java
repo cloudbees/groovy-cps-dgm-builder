@@ -141,6 +141,9 @@ public class Translator {
         javac.analyze();
     }
 
+    /**
+     * Transforms a single class.
+     */
     public void translate(String fqcn, String outfqcn) throws JClassAlreadyExistsException {
         final JDefinedClass $output = codeModel._class(outfqcn);
 
