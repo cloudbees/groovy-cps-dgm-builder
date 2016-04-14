@@ -2,6 +2,9 @@ package com.cloudbees.groovy.cps.tool;
 
 import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.tools.javac.api.JavacTool;
+import com.sun.tools.javac.file.JavacFileManager;
+import com.sun.tools.javac.file.RelativePath.RelativeDirectory;
+import com.sun.tools.javac.file.ZipArchive;
 import groovy.lang.GroovyShell;
 import hudson.remoting.Which;
 
@@ -12,9 +15,8 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.File;
 import java.nio.charset.Charset;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
+import java.util.zip.ZipFile;
 
 import static java.util.Arrays.*;
 
@@ -34,6 +36,18 @@ public class Driver {
             fileManager.setLocation(StandardLocation.CLASS_PATH,
                     Collections.singleton(Which.jarFile(GroovyShell.class)));
 
+            File groovySrcJar = Which.jarFile(Driver.class.getClassLoader().getResource("groovy/lang/GroovyShell.java"));
+
+            // classes to translate
+            List<String> fileNames = asList("DefaultGroovyMethods", "ProcessGroovyMethods");
+
+            List<JavaFileObject> src = new ArrayList<>();
+            ZipArchive a = new ZipArchive((JavacFileManager) fileManager, new ZipFile(groovySrcJar));
+
+            for (String name : fileNames) {
+                src.add(a.getFileObject(new RelativeDirectory("org/codehaus/groovy/runtime"),name+".java"));
+            }
+
             // annotation processing appears to cause the source files to be reparsed
             // (even though I couldn't find exactly where it's done), which causes
             // Tree symbols created by the original JavacTask.parse() call to be thrown away,
@@ -41,13 +55,14 @@ public class Driver {
             // So for now, don't perform annotation processing
             List<String> options = asList("-proc:none");
 
-            Translator t = new Translator(javac.getTask(null, fileManager, errorListener, options, null,
-                    fileManager.getJavaFileObjectsFromFiles(
-                            Collections.singleton(new File("DefaultGroovyMethods.java")))));
+            Translator t = new Translator(javac.getTask(null, fileManager, errorListener, options, null, src));
 
-            t.translate(
-                    "org.codehaus.groovy.runtime.DefaultGroovyMethods",
-                    "com.cloudbees.groovy.cps.CpsDefaultGroovyMethods");
+            for (String name : fileNames) {
+                t.translate(
+                        "org.codehaus.groovy.runtime."+name,
+                        "com.cloudbees.groovy.cps.Cps"+name);
+            }
+
 
             File dir = new File("out");
             dir.mkdirs();
