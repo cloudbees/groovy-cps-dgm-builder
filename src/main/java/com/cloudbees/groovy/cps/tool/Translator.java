@@ -344,7 +344,7 @@ public class Translator {
             public JExpression visitVariable(VariableTree vt, Void __) {
                 return $b.invoke("declareVariable")
                         .arg(loc(vt))
-                        .arg(erasuse(vt).dotclass())
+                        .arg(erasure(vt).dotclass())
                         .arg(n(vt))
                         .arg(visit(vt.getInitializer()));
             }
@@ -398,7 +398,7 @@ public class Translator {
                 return $b.invoke("cast")
                         .arg(loc(tt))
                         .arg(visit(tt.getExpression()))
-                        .arg(erasuse(tt.getType()).dotclass())
+                        .arg(erasure(tt.getType()).dotclass())
                         .arg(JExpr.lit(false));
             }
 
@@ -524,7 +524,7 @@ public class Translator {
                 return $b.invoke("forInLoop")
                         .arg(loc(et))
                         .arg(JExpr._null())
-                        .arg(erasuse(et.getVariable()).dotclass())
+                        .arg(erasure(et.getVariable()).dotclass())
                         .arg(n(et.getVariable()))
                         .arg(visit(et.getExpression()))
                         .arg(visit(et.getStatement()));
@@ -620,7 +620,7 @@ public class Translator {
     /**
      * Converts a type representation to its erasure.
      */
-    private JType erasuse(Tree t) {
+    private JType erasure(Tree t) {
         return t.accept(new TypeTranslator() {
             @Override
             public JType visitParameterizedType(ParameterizedTypeTree pt, Void __) {
