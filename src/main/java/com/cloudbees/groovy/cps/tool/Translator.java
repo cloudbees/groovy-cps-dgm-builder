@@ -156,7 +156,11 @@ public class Translator {
             public Void visitExecutable(ExecutableElement e, Void __) {
                 if (isGdkMethodWithClosureArgument(e)
                  && !EXCLUSIONS.contains(n(e))) {
-                    translateMethod(dgmCut, e, $output);
+                    try {
+                        translateMethod(dgmCut, e, $output);
+                    } catch (Exception x) {
+                        throw new RuntimeException("Unable to transform "+fqcn+"."+e, x);
+                    }
                 }
                 return null;
             }
