@@ -61,13 +61,10 @@ import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
-import groovy.lang.Closure;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
@@ -86,10 +83,8 @@ import javax.tools.JavaCompiler.CompilationTask;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
@@ -99,10 +94,10 @@ import java.util.Set;
 @SuppressWarnings("Since15")
 public class Translator {
 
-    private Types types;
-    private Elements elements;
-    private Trees trees;
-    private JavacTask javac;
+    public final Types types;
+    public final Elements elements;
+    public final Trees trees;
+    public final JavacTask javac;
 
     private final JCodeModel codeModel = new JCodeModel();
 
@@ -132,7 +127,6 @@ public class Translator {
         $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
         $DefaultGroovyMethods  = codeModel.ref("org.codehaus.groovy.runtime.DefaultGroovyMethods");
 
-        javac = (JavacTask) task;
         trees = Trees.instance(javac);
         elements = javac.getElements();
         types = javac.getTypes();
@@ -144,18 +138,15 @@ public class Translator {
     /**
      * Transforms a single class.
      */
-    public void translate(String fqcn, String outfqcn) throws JClassAlreadyExistsException {
+    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
         final JDefinedClass $output = codeModel._class(outfqcn);
 
         CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
 
-        final DeclaredType closureType = types.getDeclaredType(elements.getTypeElement(Closure.class.getName()));
-
         ClassSymbol dgm = (ClassSymbol) elements.getTypeElement(fqcn);
         dgm.accept(new ElementScanner7<Void,Void>() {
             public Void visitExecutable(ExecutableElement e, Void __) {
-                if (isGdkMethodWithClosureArgument(e)
-                 && !EXCLUSIONS.contains(n(e))) {
+                if (methodSelector.test(e)) {
                     try {
                         translateMethod(dgmCut, e, $output);
                     } catch (Exception x) {
@@ -163,18 +154,6 @@ public class Translator {
                     }
                 }
                 return null;
-            }
-
-            /**
-             * Criteria:
-             *      1. public static method
-             *      2. has a Closure parameter in one of the arguments, not in the receiver
-             */
-            private boolean isGdkMethodWithClosureArgument(ExecutableElement e) {
-                return e.getKind() == ElementKind.METHOD
-                    && e.getModifiers().containsAll(PUBLIC_STATIC)
-                    && e.getParameters().subList(1, e.getParameters().size()).stream()
-                        .anyMatch(p -> types.isAssignable(p.asType(), closureType));
             }
         },null);
 
@@ -696,8 +675,6 @@ public class Translator {
         return n(v.getName());
     }
 
-    private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
-
     private JType primitive(Object src, TypeKind k) {
         switch (k) {
         case BOOLEAN:   return codeModel.INT;
@@ -712,13 +689,6 @@ public class Translator {
         }
         throw new UnsupportedOperationException(src.toString());
     }
-
-    private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
-            "runAfter", /* use anonymous inner class we can't handle */
-            "accept" /* launches a thread */,
-            "filterLine",    /* anonymous inner classes */
-            "dropWhile","takeWhile" /* TODO: translate inner classes to support this*/
-    ));
 
     /**
      * Generate transalted result into source files.
