@@ -12,10 +12,11 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.File;
 import java.nio.charset.Charset;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+
+import static java.util.Arrays.*;
 
 /**
  * @author Kohsuke Kawaguchi
@@ -26,13 +27,10 @@ public class Driver {
     }
 
     public void run() throws Exception {
-        StandardJavaFileManager fileManager = null;
-        try {
-            JavaCompiler javac1 = JavacTool.create();
-            DiagnosticListener<JavaFileObject> errorListener = createErrorListener();
-            fileManager = javac1.getStandardFileManager(errorListener, Locale.getDefault(), Charset.defaultCharset());
+        JavaCompiler javac = JavacTool.create();
+        DiagnosticListener<JavaFileObject> errorListener = createErrorListener();
 
-
+        try (StandardJavaFileManager fileManager = javac.getStandardFileManager(errorListener, Locale.getDefault(), Charset.defaultCharset())) {
             fileManager.setLocation(StandardLocation.CLASS_PATH,
                     Collections.singleton(Which.jarFile(GroovyShell.class)));
 
@@ -41,13 +39,11 @@ public class Driver {
             // Tree symbols created by the original JavacTask.parse() call to be thrown away,
             // which breaks later processing.
             // So for now, don't perform annotation processing
-            List<String> options = Arrays.asList("-proc:none");
+            List<String> options = asList("-proc:none");
 
-            Iterable<? extends JavaFileObject> files = fileManager.getJavaFileObjectsFromFiles(
-                    Collections.singleton(new File("DefaultGroovyMethods.java")));
-
-            JavaCompiler.CompilationTask task = javac1.getTask(null, fileManager, errorListener, options, null, files);
-            Translator t = new Translator(task);
+            Translator t = new Translator(javac.getTask(null, fileManager, errorListener, options, null,
+                    fileManager.getJavaFileObjectsFromFiles(
+                            Collections.singleton(new File("DefaultGroovyMethods.java")))));
 
             t.translate(
                     "org.codehaus.groovy.runtime.DefaultGroovyMethods",
@@ -56,9 +52,6 @@ public class Driver {
             File dir = new File("out");
             dir.mkdirs();
             t.generateTo(new FileCodeWriter(dir));
-        } finally {
-            if (fileManager!=null)
-                fileManager.close();
         }
     }
 

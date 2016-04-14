@@ -1,6 +1,5 @@
 package com.cloudbees.groovy.cps.tool;
 
-import com.google.common.collect.Iterables;
 import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -14,7 +13,6 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
@@ -55,7 +53,6 @@ import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SimpleTreeVisitor;
 import com.sun.source.util.Trees;
-import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.TypeVariableSymbol;
@@ -65,8 +62,6 @@ import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import groovy.lang.Closure;
-import groovy.lang.GroovyShell;
-import hudson.remoting.Which;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import javax.lang.model.element.Element;
@@ -87,22 +82,13 @@ import javax.lang.model.util.ElementScanner7;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.SimpleTypeVisitor6;
 import javax.lang.model.util.Types;
-import javax.tools.DiagnosticListener;
-import javax.tools.JavaCompiler;
 import javax.tools.JavaCompiler.CompilationTask;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -133,6 +119,9 @@ public class Translator {
      */
     private final Iterable<? extends CompilationUnitTree> parsed;
 
+    /**
+     * Parse the source code and prepare for translations.
+     */
     public Translator(CompilationTask task) throws IOException {
         this.javac = (JavacTask)task;
 
@@ -164,7 +153,7 @@ public class Translator {
             public Void visitExecutable(ExecutableElement e, Void __) {
                 if (isGdkMethodWithClosureArgument(e)
                  && !EXCLUSIONS.contains(n(e))) {
-                    translate(dgmCut, e, $output);
+                    translateMethod(dgmCut, e, $output);
                 }
                 return null;
             }
@@ -199,7 +188,7 @@ public class Translator {
      * @param e
      *      Method in {@link DefaultGroovyMethods} to translate.
      */
-    private void translate(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output) {
+    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output) {
         String methodName = n(e);
         JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
 
