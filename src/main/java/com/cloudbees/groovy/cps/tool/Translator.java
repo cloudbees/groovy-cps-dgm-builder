@@ -1,5 +1,6 @@
 package com.cloudbees.groovy.cps.tool;
 
+import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
@@ -12,7 +13,6 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
@@ -53,7 +53,6 @@ import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SimpleTreeVisitor;
 import com.sun.source.util.Trees;
-import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.TypeVariableSymbol;
@@ -62,15 +61,10 @@ import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
-import groovy.lang.Closure;
-import groovy.lang.GroovyShell;
-import hudson.remoting.Which;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
@@ -85,21 +79,12 @@ import javax.lang.model.util.ElementScanner7;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.SimpleTypeVisitor6;
 import javax.lang.model.util.Types;
-import javax.tools.DiagnosticListener;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import java.io.File;
-import java.nio.charset.Charset;
+import javax.tools.JavaCompiler.CompilationTask;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
@@ -109,13 +94,12 @@ import java.util.Set;
 @SuppressWarnings("Since15")
 public class Translator {
 
-    private Types types;
-    private Elements elements;
-    private Trees trees;
-    private JavacTask javac;
+    public final Types types;
+    public final Elements elements;
+    public final Trees trees;
+    public final JavacTask javac;
 
     private final JCodeModel codeModel = new JCodeModel();
-    private final JDefinedClass $CpsDefaultGroovyMethods;
 
     // class references
     private final JClass $Caller;
@@ -125,122 +109,74 @@ public class Translator {
     private final JClass $CatchExpression;
     private final JClass $DefaultGroovyMethods;
 
-    public Translator() {
-        try {
-            $CpsDefaultGroovyMethods = codeModel._class("com.cloudbees.groovy.cps.CpsDefaultGroovyMethods");
-        } catch (JClassAlreadyExistsException e) {
-            throw new AssertionError(e);
-        }
+    /**
+     * Parsed source files.
+     */
+    private final Iterable<? extends CompilationUnitTree> parsed;
+
+    /**
+     * Parse the source code and prepare for translations.
+     */
+    public Translator(CompilationTask task) throws IOException {
+        this.javac = (JavacTask)task;
+
         $Caller                = codeModel.ref("com.cloudbees.groovy.cps.impl.Caller");
         $CpsFunction           = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsFunction");
         $CpsCallableInvocation = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsCallableInvocation");
         $Builder               = codeModel.ref("com.cloudbees.groovy.cps.Builder");
         $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
         $DefaultGroovyMethods  = codeModel.ref("org.codehaus.groovy.runtime.DefaultGroovyMethods");
+
+        trees = Trees.instance(javac);
+        elements = javac.getElements();
+        types = javac.getTypes();
+
+        this.parsed = javac.parse();
+        javac.analyze();
     }
 
-    public static void main(String[] args) throws Exception {
-        new Translator().translate(new File("DefaultGroovyMethods.java"));
-    }
+    /**
+     * Transforms a single class.
+     */
+    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
+        final JDefinedClass $output = codeModel._class(outfqcn);
 
-    public void translate(File dgmJava) throws Exception {
-        StandardJavaFileManager fileManager = null;
-        try {
-            JavaCompiler javac1 = JavacTool.create();
-            DiagnosticListener<JavaFileObject> errorListener = createErrorListener();
-            fileManager = javac1.getStandardFileManager(errorListener, Locale.getDefault(), Charset.defaultCharset());
+        CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
 
-
-            fileManager.setLocation(StandardLocation.CLASS_PATH,
-                    Collections.singleton(Which.jarFile(GroovyShell.class)));
-
-            // annotation processing appears to cause the source files to be reparsed
-            // (even though I couldn't find exactly where it's done), which causes
-            // Tree symbols created by the original JavacTask.parse() call to be thrown away,
-            // which breaks later processing.
-            // So for now, don't perform annotation processing
-            List<String> options = Arrays.asList("-proc:none");
-
-            Iterable<? extends JavaFileObject> files = fileManager.getJavaFileObjectsFromFiles(
-                    Collections.singleton(dgmJava));
-            JavaCompiler.CompilationTask task = javac1.getTask(null, fileManager, errorListener, options, null, files);
-            javac = (JavacTask) task;
-            trees = Trees.instance(javac);
-            elements = javac.getElements();
-            types = javac.getTypes();
-
-            Iterable<? extends CompilationUnitTree> parsed = javac.parse();
-            javac.analyze();
-
-            CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
-
-            final DeclaredType closureType = types.getDeclaredType(elements.getTypeElement(Closure.class.getName()));
-
-            ClassSymbol dgm = (ClassSymbol) elements.getTypeElement("org.codehaus.groovy.runtime.DefaultGroovyMethods");
-            dgm.accept(new ElementScanner7<Void,Void>() {
-                public Void visitExecutable(ExecutableElement e, Void __) {
-                    if (isGdkMethodWithClosureArgument(e)
-                     && !EXCLUSIONS.contains(n(e))) {
-                        translate(dgmCut, e);
-                    }
-                    return null;
-                }
-
-                /**
-                 * Criteria:
-                 *      1. public static method
-                 *      2. has a Closure parameter in one of the arguments, not in the receiver
-                 */
-                private boolean isGdkMethodWithClosureArgument(ExecutableElement e) {
-                    return e.getKind() == ElementKind.METHOD
-                        && e.getModifiers().containsAll(PUBLIC_STATIC)
-                        && e.getParameters().subList(1, e.getParameters().size()).stream()
-                            .anyMatch(p -> types.isAssignable(p.asType(), closureType));
-                }
-            },null);
-
-            /*
-                private static MethodLocation loc(String methodName) {
-                    return new MethodLocation(CpsDefaultGroovyMethods.class,methodName);
-                }
-            */
-
-            JClass $MethodLocation = codeModel.ref("com.cloudbees.groovy.cps.MethodLocation");
-            $CpsDefaultGroovyMethods.method(JMod.PRIVATE|JMod.STATIC, $MethodLocation, "loc").tap( m -> {
-                JVar $methodName = m.param(String.class, "methodName");
-                m.body()._return(JExpr._new($MethodLocation).arg($CpsDefaultGroovyMethods.dotclass()).arg($methodName));
-            });
-        } finally {
-            if (fileManager!=null)
-                fileManager.close();
-        }
-
-        File dir = new File("out");
-        dir.mkdirs();
-        codeModel.build(new FileCodeWriter(dir));
-    }
-
-    private CompilationUnitTree getDefaultGroovyMethodCompilationUnitTree(Iterable<? extends CompilationUnitTree> parsed) {
-        for (CompilationUnitTree cut : parsed) {
-            for (Tree t : cut.getTypeDecls()) {
-                if (t.getKind() == Kind.CLASS) {
-                    ClassTree ct = (ClassTree)t;
-                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) {
-                        return cut;
+        ClassSymbol dgm = (ClassSymbol) elements.getTypeElement(fqcn);
+        dgm.accept(new ElementScanner7<Void,Void>() {
+            public Void visitExecutable(ExecutableElement e, Void __) {
+                if (methodSelector.test(e)) {
+                    try {
+                        translateMethod(dgmCut, e, $output);
+                    } catch (Exception x) {
+                        throw new RuntimeException("Unable to transform "+fqcn+"."+e, x);
                     }
                 }
+                return null;
             }
-        }
-        throw new IllegalStateException("DefaultGroovyMethods wasn't parsed");
+        },null);
+
+        /*
+            private static MethodLocation loc(String methodName) {
+                return new MethodLocation(CpsDefaultGroovyMethods.class,methodName);
+            }
+        */
+
+        JClass $MethodLocation = codeModel.ref("com.cloudbees.groovy.cps.MethodLocation");
+        $output.method(JMod.PRIVATE|JMod.STATIC, $MethodLocation, "loc").tap( m -> {
+            JVar $methodName = m.param(String.class, "methodName");
+            m.body()._return(JExpr._new($MethodLocation).arg($output.dotclass()).arg($methodName));
+        });
     }
 
     /**
      * @param e
      *      Method in {@link DefaultGroovyMethods} to translate.
      */
-    private void translate(final CompilationUnitTree cut, ExecutableElement e) {
+    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output) {
         String methodName = n(e);
-        JMethod m = $CpsDefaultGroovyMethods.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
+        JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
 
         e.getTypeParameters().forEach( p -> m.generify(n(p)));  // TODO: bound
 
@@ -261,7 +197,7 @@ public class Translator {
                             inv.arg(params.get(i));
                     })),
                     JOp.not($Caller.staticInvoke("isAsynchronous")
-                            .arg($CpsDefaultGroovyMethods.dotclass())
+                            .arg($output.dotclass())
                             .arg(methodName)
                             .args(params))
             ))._then().tap(blk -> {
@@ -610,6 +546,21 @@ public class Translator {
             .args(params));
     }
 
+    private CompilationUnitTree getDefaultGroovyMethodCompilationUnitTree(Iterable<? extends CompilationUnitTree> parsed) {
+        for (CompilationUnitTree cut : parsed) {
+            for (Tree t : cut.getTypeDecls()) {
+                if (t.getKind() == Kind.CLASS) {
+                    ClassTree ct = (ClassTree)t;
+                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) {
+                        return cut;
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException("DefaultGroovyMethods wasn't parsed");
+    }
+
+
     /**
      * Convert a type representation from javac to codemodel.
      */
@@ -724,15 +675,6 @@ public class Translator {
         return n(v.getName());
     }
 
-    protected DiagnosticListener<JavaFileObject> createErrorListener() {
-        return diagnostic -> {
-            //TODO report
-            System.out.println(diagnostic);
-        };
-    }
-
-    private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
-
     private JType primitive(Object src, TypeKind k) {
         switch (k) {
         case BOOLEAN:   return codeModel.INT;
@@ -748,12 +690,12 @@ public class Translator {
         throw new UnsupportedOperationException(src.toString());
     }
 
-    private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
-            "runAfter", /* use anonymous inner class we can't handle */
-            "accept" /* launches a thread */,
-            "filterLine",    /* anonymous inner classes */
-            "dropWhile","takeWhile" /* TODO: translate inner classes to support this*/
-    ));
+    /**
+     * Generate transalted result into source files.
+     */
+    public void generateTo(CodeWriter cw) throws IOException {
+        codeModel.build(cw);
+    }
 
     private class TypeTranslator extends SimpleTreeVisitor<JType, Void> {
         protected JType visit(Tree t) {
