@@ -1,13 +1,11 @@
 package com.cloudbees.groovy.cps.tool;
 
-import com.sun.codemodel.writer.FileCodeWriter;
+import com.sun.codemodel.CodeWriter;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.file.RelativePath.RelativeDirectory;
 import com.sun.tools.javac.file.ZipArchive;
 import groovy.lang.Closure;
-import groovy.lang.GroovyShell;
-import hudson.remoting.Which;
 
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -17,13 +15,12 @@ import javax.tools.DiagnosticListener;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -34,22 +31,20 @@ import java.util.zip.ZipFile;
 import static java.util.Arrays.*;
 
 /**
+ * Setup Javac and runs {@link Translator} with right configuration.
+ *
  * @author Kohsuke Kawaguchi
  */
-public class Driver {
-    public static void main(String[] args) throws Exception {
-        new Driver().run();
-    }
+public abstract class Driver {
 
     public void run() throws Exception {
         JavaCompiler javac = JavacTool.create();
         DiagnosticListener<JavaFileObject> errorListener = createErrorListener();
 
         try (StandardJavaFileManager fileManager = javac.getStandardFileManager(errorListener, Locale.getDefault(), Charset.defaultCharset())) {
-            fileManager.setLocation(StandardLocation.CLASS_PATH,
-                    Collections.singleton(Which.jarFile(GroovyShell.class)));
+            setupClassPath(fileManager);
 
-            File groovySrcJar = Which.jarFile(Driver.class.getClassLoader().getResource("groovy/lang/GroovyShell.java"));
+            File groovySrcJar = resolveSourceJar();
 
             // classes to translate
             List<String> fileNames = asList("DefaultGroovyMethods", "ProcessGroovyMethods", "DefaultGroovyStaticMethods");
@@ -93,15 +88,31 @@ public class Driver {
             }
 
 
-            File dir = new File("out");
-            dir.mkdirs();
-            t.generateTo(new FileCodeWriter(dir));
+            CodeWriter cw = createWriter();
+            try {
+                t.generateTo(cw);
+            } finally {
+                cw.close();
+            }
         }
     }
 
-    private DiagnosticListener<JavaFileObject> createErrorListener() {
-        return System.out::println;
-    }
+    /**
+     * Controls where the generated source files are written to.
+     */
+    protected abstract CodeWriter createWriter() throws IOException;
+
+    /**
+     * Locate the groovy source jar that contains DefaultGroovyMethods.java to compile
+     */
+    protected abstract File resolveSourceJar() throws IOException;
+
+    /**
+     * Set up classpath necessary to invoke javac.
+     */
+    protected abstract void setupClassPath(StandardJavaFileManager fileManager) throws IOException;
+
+    protected abstract DiagnosticListener<JavaFileObject> createErrorListener();
 
     private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
 
