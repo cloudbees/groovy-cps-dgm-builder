@@ -84,7 +84,7 @@ public abstract class Driver {
                 t.translate(
                         "org.codehaus.groovy.runtime."+name,
                         "com.cloudbees.groovy.cps.Cps"+name,
-                        selector);
+                        selector).javadoc().add("Generated from "+groovySrcJar);
             }
 
 

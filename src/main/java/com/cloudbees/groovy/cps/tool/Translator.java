@@ -138,7 +138,7 @@ public class Translator {
     /**
      * Transforms a single class.
      */
-    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
+    public JDefinedClass translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
         final JDefinedClass $output = codeModel._class(outfqcn);
 
         CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
@@ -168,6 +168,8 @@ public class Translator {
             JVar $methodName = m.param(String.class, "methodName");
             m.body()._return(JExpr._new($MethodLocation).arg($output.dotclass()).arg($methodName));
         });
+
+        return $output;
     }
 
     /**
