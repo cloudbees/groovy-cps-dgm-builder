@@ -17,6 +17,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.codehaus.plexus.util.FileUtils;
+import org.codehaus.plexus.util.StringUtils;
 
 import javax.tools.DiagnosticListener;
 import javax.tools.JavaFileObject;
@@ -71,6 +73,18 @@ public class MojoImpl extends AbstractMojo {
             dir.mkdirs();
             project.addCompileSourceRoot(dir.getAbsolutePath());
 
+            File upToDate = new File(dir,"upToDate");
+            String id = StringUtils.join(new Object[]{
+                    groovy.getGroupId(),
+                    groovy.getArtifactId(),
+                    groovy.getVersion()
+            },":");
+
+            if (upToDate.exists() && FileUtils.fileRead(upToDate).equals(id)) {
+                getLog().info("CpsDefaultGroovyMethods is up to date");
+                return;
+            }
+
             new Driver() {
                 @Override
                 protected CodeWriter createWriter() throws IOException {
@@ -111,6 +125,8 @@ public class MojoImpl extends AbstractMojo {
                     };
                 }
             }.run();
+
+            FileUtils.fileWrite(upToDate.getPath(),id);
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to generate DefaultGroovyMethods",e);
         }
