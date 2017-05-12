@@ -52,6 +52,7 @@ public class Driver {
             File groovySrcJar = Which.jarFile(Driver.class.getClassLoader().getResource("groovy/lang/GroovyShell.java"));
 
             // classes to translate
+            // TODO include other classes mentioned in DgmConverter just in case
             List<String> fileNames = asList("DefaultGroovyMethods", "ProcessGroovyMethods", "DefaultGroovyStaticMethods");
 
             List<JavaFileObject> src = new ArrayList<>();

@@ -138,6 +138,7 @@ public class Translator {
      * Transforms a single class.
      */
     public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector, String sourceJarName) throws JClassAlreadyExistsException {
+        // TODO avoid calling _class until we have confirmed we are selecting at least one method
         final JDefinedClass $output = codeModel._class(outfqcn);
         $output.annotate(Generated.class).param("value", Translator.class.getName()).param("date", new Date().toString()).param("comments", "based on " + sourceJarName);
 
