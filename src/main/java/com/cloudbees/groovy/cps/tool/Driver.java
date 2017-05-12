@@ -1,5 +1,6 @@
 package com.cloudbees.groovy.cps.tool;
 
+import com.google.common.collect.ImmutableSet;
 import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
@@ -24,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -78,18 +78,21 @@ public class Driver {
              *      2. has a Closure parameter in one of the arguments, not in the receiver
              */
             Predicate<ExecutableElement> selector = (e) -> {
-                return e.getKind() == ElementKind.METHOD
-                    && e.getModifiers().containsAll(PUBLIC_STATIC)
-                    && e.getParameters().subList(1, e.getParameters().size()).stream()
-                        .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
-                    && !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString()+"."+e.getSimpleName().toString());
+                boolean r = e.getKind() == ElementKind.METHOD
+                        && e.getModifiers().containsAll(PUBLIC_STATIC)
+                        && e.getParameters().subList(1, e.getParameters().size()).stream()
+                                .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
+                        && e.getAnnotation(Deprecated.class) == null
+                        && !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString()+"."+e.getSimpleName().toString());
+                System.err.println("Translating " + e + "? " + r);
+                return r;
             };
 
             for (String name : fileNames) {
                 t.translate(
                         "org.codehaus.groovy.runtime."+name,
                         "com.cloudbees.groovy.cps.Cps"+name,
-                        selector);
+                        selector, groovySrcJar.getName());
             }
 
 
@@ -105,13 +108,14 @@ public class Driver {
 
     private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
 
-    private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
+    private static final Set<String> EXCLUSIONS = ImmutableSet.of(
             "DefaultGroovyMethods.runAfter", /* use anonymous inner class we can't handle */
             "DefaultGroovyMethods.accept" /* launches a thread */,
             "DefaultGroovyMethods.filterLine",    /* anonymous inner classes */
             "DefaultGroovyMethods.dropWhile","DefaultGroovyMethods.takeWhile" /* TODO: translate inner classes to support this*/,
+            "DefaultGroovyMethods.toUnique", // ditto: UniqueIterator is private
 
             "ProcessGroovyMethods.withWriter",
             "ProcessGroovyMethods.withOutputStream" /* anonymous inner class */
-    ));
+    );
 }

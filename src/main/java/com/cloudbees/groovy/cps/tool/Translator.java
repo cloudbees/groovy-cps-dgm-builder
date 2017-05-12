@@ -61,7 +61,6 @@ import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
-import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -83,8 +82,10 @@ import javax.tools.JavaCompiler.CompilationTask;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.function.Predicate;
+import javax.annotation.Generated;
 
 /**
  * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
@@ -107,7 +108,6 @@ public class Translator {
     private final JClass $CpsCallableInvocation;
     private final JClass $Builder;
     private final JClass $CatchExpression;
-    private final JClass $DefaultGroovyMethods;
 
     /**
      * Parsed source files.
@@ -125,7 +125,6 @@ public class Translator {
         $CpsCallableInvocation = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsCallableInvocation");
         $Builder               = codeModel.ref("com.cloudbees.groovy.cps.Builder");
         $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
-        $DefaultGroovyMethods  = codeModel.ref("org.codehaus.groovy.runtime.DefaultGroovyMethods");
 
         trees = Trees.instance(javac);
         elements = javac.getElements();
@@ -138,8 +137,9 @@ public class Translator {
     /**
      * Transforms a single class.
      */
-    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
+    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector, String sourceJarName) throws JClassAlreadyExistsException {
         final JDefinedClass $output = codeModel._class(outfqcn);
+        $output.annotate(Generated.class).param("value", Translator.class.getName()).param("date", new Date().toString()).param("comments", "based on " + sourceJarName);
 
         CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
 
@@ -148,7 +148,7 @@ public class Translator {
             public Void visitExecutable(ExecutableElement e, Void __) {
                 if (methodSelector.test(e)) {
                     try {
-                        translateMethod(dgmCut, e, $output);
+                        translateMethod(dgmCut, e, $output, fqcn);
                     } catch (Exception x) {
                         throw new RuntimeException("Unable to transform "+fqcn+"."+e, x);
                     }
@@ -172,9 +172,9 @@ public class Translator {
 
     /**
      * @param e
-     *      Method in {@link DefaultGroovyMethods} to translate.
+     *      Method in {@code fqcn} to translate.
      */
-    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output) {
+    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn) {
         String methodName = n(e);
         JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
 
@@ -201,7 +201,8 @@ public class Translator {
                             .arg(methodName)
                             .args(params))
             ))._then().tap(blk -> {
-                JInvocation forward = $DefaultGroovyMethods.staticInvoke(methodName).args(params);
+                JClass $WhateverGroovyMethods  = codeModel.ref(fqcn);
+                JInvocation forward = $WhateverGroovyMethods.staticInvoke(methodName).args(params);
 
                 if (e.getReturnType().getKind() == TypeKind.VOID) {
                     blk.add(forward);
@@ -246,26 +247,30 @@ public class Translator {
             @Override
             public JExpression visitMethodInvocation(MethodInvocationTree mt, Void __) {
                 ExpressionTree ms = mt.getMethodSelect();
-                JInvocation inv = $b.invoke("functionCall")
-                        .arg(loc(mt));
+                JInvocation inv;
 
                 if (ms instanceof MemberSelectTree) {
                     MemberSelectTree mst = (MemberSelectTree) ms;
-                    inv
+                    inv = $b.invoke("functionCall")
+                        .arg(loc(mt))
                         .arg(visit(mst.getExpression()))
                         .arg(n(mst.getIdentifier()));
                 } else
                 if (ms instanceof JCIdent) {
                     // invocation without object selection, like  foo(bar,zot)
                     JCIdent it = (JCIdent) ms;
-                    if (!it.sym.owner.toString().equals(DefaultGroovyMethods.class.getName())) {
+                    if (!it.sym.owner.toString().equals(fqcn)) {
                         // static import
-                        inv.arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
-                           .arg(n(it));
+                        inv = $b.invoke("functionCall")
+                            .arg(loc(mt))
+                            .arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
+                            .arg(n(it));
                     } else {
                         // invocation on this class
-                        inv.arg($b.invoke("this_"))
-                           .arg(n(it));
+                        inv = $b.invoke("staticCall")
+                            .arg(loc(mt))
+                            .arg($output.dotclass())
+                            .arg(n(it));
                     }
                 } else {
                     // TODO: figure out what can come here
