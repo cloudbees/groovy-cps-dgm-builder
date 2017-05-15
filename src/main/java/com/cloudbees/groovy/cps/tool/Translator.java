@@ -137,7 +137,7 @@ public class Translator {
     /**
      * Transforms a single class.
      */
-    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector, String sourceJarName) throws JClassAlreadyExistsException {
+    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector, Predicate<ExecutableElement> supportedSelector, String sourceJarName) throws JClassAlreadyExistsException {
         // TODO avoid calling _class until we have confirmed we are selecting at least one method
         final JDefinedClass $output = codeModel._class(outfqcn);
         $output.annotate(Generated.class).param("value", Translator.class.getName()).param("date", new Date().toString()).param("comments", "based on " + sourceJarName);
@@ -149,7 +149,7 @@ public class Translator {
             public Void visitExecutable(ExecutableElement e, Void __) {
                 if (methodSelector.test(e)) {
                     try {
-                        translateMethod(dgmCut, e, $output, fqcn);
+                        translateMethod(dgmCut, e, $output, fqcn, supportedSelector.test(e));
                     } catch (Exception x) {
                         throw new RuntimeException("Unable to transform "+fqcn+"."+e, x);
                     }
@@ -175,7 +175,7 @@ public class Translator {
      * @param e
      *      Method in {@code fqcn} to translate.
      */
-    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn) {
+    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn, boolean supported) {
         String methodName = n(e);
         JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
 
@@ -212,6 +212,12 @@ public class Translator {
                     blk._return(forward);
                 }
             });
+        }
+
+        if (!supported) {
+            m.body()._throw(JExpr._new(codeModel.ref(UnsupportedOperationException.class))
+                .arg(fqcn + "." + e + " is not yet supported for translation; use another idiom, or wrap in @NonCPS"));
+            return;
         }
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));

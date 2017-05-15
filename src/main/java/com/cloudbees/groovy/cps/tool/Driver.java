@@ -83,8 +83,7 @@ public class Driver {
                         && e.getModifiers().containsAll(PUBLIC_STATIC)
                         && e.getParameters().subList(1, e.getParameters().size()).stream()
                                 .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
-                        && e.getAnnotation(Deprecated.class) == null
-                        && !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString()+"."+e.getSimpleName().toString());
+                        && e.getAnnotation(Deprecated.class) == null;
                 System.err.println("Translating " + e + "? " + r);
                 return r;
             };
@@ -93,7 +92,9 @@ public class Driver {
                 t.translate(
                         "org.codehaus.groovy.runtime."+name,
                         "com.cloudbees.groovy.cps.Cps"+name,
-                        selector, groovySrcJar.getName());
+                        selector,
+                        e -> !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString() + "." + e.getSimpleName().toString()),
+                        groovySrcJar.getName());
             }
 
 
