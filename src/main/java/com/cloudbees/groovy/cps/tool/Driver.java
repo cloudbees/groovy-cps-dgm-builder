@@ -73,18 +73,18 @@ public class Driver {
 
             final DeclaredType closureType = t.types.getDeclaredType(t.elements.getTypeElement(Closure.class.getName()));
 
-            /**
-             * Criteria:
-             *      1. public static method
-             *      2. has a Closure parameter in one of the arguments, not in the receiver
-             */
             Predicate<ExecutableElement> selector = (e) -> {
-                boolean r = e.getKind() == ElementKind.METHOD
-                        && e.getModifiers().containsAll(PUBLIC_STATIC)
+                boolean r =
+                        // Only interested here in methods; not currently handling nested classes.
+                        e.getKind() == ElementKind.METHOD
+                        // Top-level invocations can only be to public static methods. But some private/protected static helper methods need translation, too.
+                        && e.getModifiers().contains(Modifier.STATIC)
+                        // Has a Closure parameter in one of the arguments (not in the receiver).
                         && e.getParameters().subList(1, e.getParameters().size()).stream()
                                 .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
+                        // Ran into problems resolving overloads from these methods.
                         && e.getAnnotation(Deprecated.class) == null;
-                System.err.println("Translating " + e + "? " + r);
+                //System.err.println("Translating " + e + "? " + r);
                 return r;
             };
 
@@ -108,11 +108,10 @@ public class Driver {
         return System.out::println;
     }
 
-    private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
-
     private static final Set<String> EXCLUSIONS = ImmutableSet.of(
             "DefaultGroovyMethods.runAfter", /* use anonymous inner class we can't handle */
             "DefaultGroovyMethods.accept" /* launches a thread */,
+            "DefaultGroovyStaticMethods.start", "DefaultGroovyStaticMethods.startDaemon", // ditto
             "DefaultGroovyMethods.filterLine",    /* anonymous inner classes */
             "DefaultGroovyMethods.dropWhile","DefaultGroovyMethods.takeWhile" /* TODO: translate inner classes to support this*/,
             "DefaultGroovyMethods.toUnique", // ditto: UniqueIterator is private

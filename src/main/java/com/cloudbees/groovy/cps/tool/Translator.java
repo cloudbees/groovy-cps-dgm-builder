@@ -86,6 +86,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.function.Predicate;
 import javax.annotation.Generated;
+import javax.lang.model.element.Modifier;
 
 /**
  * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
@@ -177,7 +178,8 @@ public class Translator {
      */
     private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn, boolean supported) {
         String methodName = n(e);
-        JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
+        boolean isPublic = e.getModifiers().contains(Modifier.PUBLIC);
+        JMethod m = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, t(e.getReturnType()), methodName);
 
         e.getTypeParameters().forEach( p -> m.generify(n(p)));  // TODO: bound
 
@@ -186,7 +188,7 @@ public class Translator {
 
         e.getThrownTypes().forEach( ex -> m._throws((JClass)t(ex)) );
 
-        {// preamble
+        if (isPublic) {// preamble
             /*
                 If the call to this method happen outside CPS code, execute normally via DefaultGroovyMethods
              */
@@ -428,6 +430,8 @@ public class Translator {
                 case CONDITIONAL_AND:       return "logicalAnd";
                 case PLUS:                  return "plus";
                 case PLUS_ASSIGNMENT:       return "plusEqual";
+                case MINUS:                 return "minus";
+                case MINUS_ASSIGNMENT:      return "minusEqual";
                 }
                 throw new UnsupportedOperationException(kind.toString());
             }
@@ -443,9 +447,8 @@ public class Translator {
             @Override
             public JExpression visitNewArray(NewArrayTree nt, Void __) {
                 if (nt.getInitializers()!=null) {
-                    return $b.invoke("newArrayFromInitializers").tap(inv -> {
-                        inv.arg(loc(nt));
-                        inv.arg(t(nt.getType()).dotclass());
+                    // This syntax does not seem to exist in Groovy (kohsuke in 88006fc tried to use a nonexistent Builder.newArrayFromInitializers).
+                    return $b.invoke("list").tap(inv -> {
                         nt.getInitializers().forEach(d -> inv.arg(visit(d)));
                     });
                 } else {
