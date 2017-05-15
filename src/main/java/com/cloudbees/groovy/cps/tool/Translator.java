@@ -12,6 +12,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
+import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
@@ -82,8 +83,11 @@ import javax.tools.JavaCompiler.CompilationTask;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 import javax.annotation.Generated;
 import javax.lang.model.element.Modifier;
@@ -179,12 +183,19 @@ public class Translator {
     private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn, boolean supported) {
         String methodName = n(e);
         boolean isPublic = e.getModifiers().contains(Modifier.PUBLIC);
-        JMethod m = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, t(e.getReturnType()), methodName);
+        JMethod m = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, (JType) null, methodName);
 
-        e.getTypeParameters().forEach( p -> m.generify(n(p)));  // TODO: bound
+        Map<String, JTypeVar> typeVars = new HashMap<>();
+        e.getTypeParameters().forEach(p -> {
+            String name = n(p);
+            JTypeVar typeVar = m.generify(name);
+            p.getBounds().forEach(b -> typeVar.bound((JClass) t(b, typeVars)));
+            typeVars.put(name, typeVar);
+        });
+        m.type(t(e.getReturnType(), typeVars));
 
         List<JVar> params = new ArrayList<>();
-        e.getParameters().forEach(p -> params.add(m.param(t(p.asType()), n(p))));
+        e.getParameters().forEach(p -> params.add(m.param(t(p.asType(), typeVars), n(p))));
 
         e.getThrownTypes().forEach( ex -> m._throws((JClass)t(ex)) );
 
@@ -221,6 +232,8 @@ public class Translator {
                 .arg(fqcn + "." + e + " is not yet supported for translation; use another idiom, or wrap in @NonCPS"));
             return;
         }
+
+        // TODO if method does not call Closure and simply delegates it somehow, translate non-CPS, so we can bypass JENKINS-44280 overload resolution bugs
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));
         JInvocation f = JExpr._new($CpsFunction);
@@ -566,7 +579,7 @@ public class Translator {
             for (Tree t : cut.getTypeDecls()) {
                 if (t.getKind() == Kind.CLASS) {
                     ClassTree ct = (ClassTree)t;
-                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) {
+                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) { // TODO use fqcn
                         return cut;
                     }
                 }
@@ -620,6 +633,10 @@ public class Translator {
     }
 
     private JType t(TypeMirror m) {
+        return t(m, Collections.emptyMap());
+    }
+
+    private JType t(TypeMirror m, Map<String, JTypeVar> typeVars) {
         if (m.getKind().isPrimitive())
             return JType.parse(codeModel,m.toString());
 
@@ -639,14 +656,20 @@ public class Translator {
                     return base;
 
                 List<JClass> typeArgs = new ArrayList<>();
-                t.getTypeArguments().forEach( a -> typeArgs.add((JClass)t(a)));
+                t.getTypeArguments().forEach(a -> typeArgs.add((JClass) t(a, typeVars)));
                 return base.narrow(typeArgs);
             }
 
             @Override
             public JType visitTypeVariable(TypeVariable t, Void __) {
-                // handling this correctly requires us tracking JTypeVar
-                return t(t.getUpperBound());
+                String name = t.asElement().getSimpleName().toString();
+                JTypeVar var = typeVars.get(name);
+                if (var != null) {
+                    return var; // TODO bounds
+                } else {
+                    // TODO <T,U>with(U,groovy.lang.Closure<T>) somehow asks us to visit V, huh?
+                    return t(t.getUpperBound(), typeVars);
+                }
             }
 
             @Override
@@ -656,13 +679,13 @@ public class Translator {
 
             @Override
             public JType visitArray(ArrayType t, Void __) {
-                return t(t.getComponentType()).array();
+                return t(t.getComponentType(), typeVars).array();
             }
 
             @Override
             public JType visitWildcard(WildcardType t, Void aVoid) {
                 if (t.getExtendsBound()!=null) {
-                    return t(t.getExtendsBound()).boxify().wildcard();
+                    return t(t.getExtendsBound(), typeVars).boxify().wildcard();
                 }
                 if (t.getSuperBound()!=null) {
                     throw new UnsupportedOperationException();
