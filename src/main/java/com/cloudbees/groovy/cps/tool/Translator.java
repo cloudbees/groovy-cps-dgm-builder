@@ -183,32 +183,64 @@ public class Translator {
     private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn, boolean supported) {
         String methodName = n(e);
         boolean isPublic = e.getModifiers().contains(Modifier.PUBLIC);
-        JMethod m = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, (JType) null, methodName);
+
+        // To allow sibling calls to overloads to be resolved properly at runtime, write the actual implementation to an overload-proof private method.
+        StringBuilder overloadResolved = new StringBuilder("$").append(methodName);
+        e.getParameters().forEach(ve -> {
+            overloadResolved.append("__").append(types.erasure(ve.asType()).toString().replace("[]", "_array").replaceAll("[^\\p{javaJavaIdentifierPart}]+", "_"));
+        }); // so, e.g., $eachByte__byte_array__groovy_lang_Closure
+        JMethod delegating = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, (JType) null, methodName);
+        JMethod m = supported ? $output.method(JMod.PRIVATE | JMod.STATIC, (JType) null, overloadResolved.toString()) : null;
 
         Map<String, JTypeVar> typeVars = new HashMap<>();
         e.getTypeParameters().forEach(p -> {
             String name = n(p);
-            JTypeVar typeVar = m.generify(name);
-            p.getBounds().forEach(b -> typeVar.bound((JClass) t(b, typeVars)));
+            JTypeVar typeVar = delegating.generify(name);
+            JTypeVar typeVar2 = supported ? m.generify(name) : null;
+            p.getBounds().forEach(b -> {
+                JClass binding = (JClass) t(b, typeVars);
+                typeVar.bound(binding);
+                if (supported) {
+                    typeVar2.bound(binding);
+                }
+            });
             typeVars.put(name, typeVar);
         });
-        m.type(t(e.getReturnType(), typeVars));
+        JType type = t(e.getReturnType(), typeVars);
+        delegating.type(type);
+        if (supported) {
+            m.type(type);
+        }
 
+        List<JVar> delegatingParams = new ArrayList<>();
         List<JVar> params = new ArrayList<>();
-        e.getParameters().forEach(p -> params.add(m.param(t(p.asType(), typeVars), n(p))));
+        e.getParameters().forEach(p -> {
+            JType paramType = t(p.asType(), typeVars);
+            delegatingParams.add(delegating.param(paramType, n(p)));
+            if (supported) {
+                params.add(m.param(paramType, n(p)));
+            }
+        });
 
-        e.getThrownTypes().forEach( ex -> m._throws((JClass)t(ex)) );
+        e.getThrownTypes().forEach(ex -> {
+            delegating._throws((JClass)t(ex));
+            if (supported) {
+                m._throws((JClass)t(ex));
+            }
+        });
+
+        boolean returnsVoid = e.getReturnType().getKind() == TypeKind.VOID;
 
         if (isPublic) {// preamble
             /*
                 If the call to this method happen outside CPS code, execute normally via DefaultGroovyMethods
              */
-            m.body()._if(JOp.cand(
+            delegating.body()._if(JOp.cand(
                     JOp.not($Caller.staticInvoke("isAsynchronous").tap(inv -> {
-                        inv.arg(params.get(0));
+                        inv.arg(delegatingParams.get(0));
                         inv.arg(methodName);
-                        for (int i = 1; i < params.size(); i++)
-                            inv.arg(params.get(i));
+                        for (int i = 1; i < delegatingParams.size(); i++)
+                            inv.arg(delegatingParams.get(i));
                     })),
                     JOp.not($Caller.staticInvoke("isAsynchronous")
                             .arg($output.dotclass())
@@ -216,9 +248,9 @@ public class Translator {
                             .args(params))
             ))._then().tap(blk -> {
                 JClass $WhateverGroovyMethods  = codeModel.ref(fqcn);
-                JInvocation forward = $WhateverGroovyMethods.staticInvoke(methodName).args(params);
+                JInvocation forward = $WhateverGroovyMethods.staticInvoke(methodName).args(delegatingParams);
 
-                if (e.getReturnType().getKind() == TypeKind.VOID) {
+                if (returnsVoid) {
                     blk.add(forward);
                     blk._return();
                 } else {
@@ -227,13 +259,19 @@ public class Translator {
             });
         }
 
-        if (!supported) {
-            m.body()._throw(JExpr._new(codeModel.ref(UnsupportedOperationException.class))
+        if (supported) {
+            JInvocation delegateCall = $output.staticInvoke(overloadResolved.toString());
+            if (returnsVoid) {
+                delegating.body().add(delegateCall);
+            } else {
+                delegating.body()._return(delegateCall);
+            }
+            delegatingParams.forEach(p -> delegateCall.arg(p));
+        } else {
+            delegating.body()._throw(JExpr._new(codeModel.ref(UnsupportedOperationException.class))
                 .arg(fqcn + "." + e + " is not yet supported for translation; use another idiom, or wrap in @NonCPS"));
             return;
         }
-
-        // TODO if method does not call Closure and simply delegates it somehow, translate non-CPS, so we can bypass JENKINS-44280 overload resolution bugs
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));
         JInvocation f = JExpr._new($CpsFunction);
@@ -289,10 +327,14 @@ public class Translator {
                             .arg(n(it));
                     } else {
                         // invocation on this class
+                        StringBuilder overloadResolved = new StringBuilder("$").append(it.getName());
+                        it.type.getParameterTypes().forEach(t -> {
+                            overloadResolved.append("__").append(types.erasure(t).toString().replace("[]", "_array").replaceAll("[^\\p{javaJavaIdentifierPart}]+", "_"));
+                        });
                         inv = $b.invoke("staticCall")
                             .arg(loc(mt))
                             .arg($output.dotclass())
-                            .arg(n(it));
+                            .arg(overloadResolved.toString());
                     }
                 } else {
                     // TODO: figure out what can come here
