@@ -22,8 +22,6 @@ import javax.tools.StandardLocation;
 import java.io.File;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +50,7 @@ public class Driver {
             File groovySrcJar = Which.jarFile(Driver.class.getClassLoader().getResource("groovy/lang/GroovyShell.java"));
 
             // classes to translate
-            // TODO include other classes mentioned in DgmConverter just in case
+            // TODO include other classes mentioned in DgmConverter just in case (first see TODO in Translator.translate); and certainly StringGroovyMethods which has some Closure-based methods
             List<String> fileNames = asList("DefaultGroovyMethods", "ProcessGroovyMethods", "DefaultGroovyStaticMethods");
 
             List<JavaFileObject> src = new ArrayList<>();
@@ -73,6 +71,7 @@ public class Driver {
 
             final DeclaredType closureType = t.types.getDeclaredType(t.elements.getTypeElement(Closure.class.getName()));
 
+            // TODO move all this into Translator
             Predicate<ExecutableElement> selector = (e) -> {
                 boolean r =
                         // Only interested here in methods; not currently handling nested classes.
@@ -80,9 +79,10 @@ public class Driver {
                         // Top-level invocations can only be to public static methods. But some private/protected static helper methods need translation, too.
                         && e.getModifiers().contains(Modifier.STATIC)
                         // Has a Closure parameter in one of the arguments (not in the receiver).
+                        // TODO need to accept nonpublic (helper) methods taking Closure as the first parameter. In fact may need to accept any helper methods.
                         && e.getParameters().subList(1, e.getParameters().size()).stream()
                                 .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
-                        // Ran into problems resolving overloads from these methods.
+                        // Ran into problems resolving overloads from these methods. TODO might be obsolete with new overload delegation system.
                         && e.getAnnotation(Deprecated.class) == null;
                 //System.err.println("Translating " + e + "? " + r);
                 return r;
