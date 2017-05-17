@@ -1,5 +1,6 @@
 package com.cloudbees.groovy.cps.tool;
 
+import com.google.common.collect.ImmutableSet;
 import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
@@ -21,10 +22,7 @@ import javax.tools.StandardLocation;
 import java.io.File;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -52,6 +50,7 @@ public class Driver {
             File groovySrcJar = Which.jarFile(Driver.class.getClassLoader().getResource("groovy/lang/GroovyShell.java"));
 
             // classes to translate
+            // TODO include other classes mentioned in DgmConverter just in case (first see TODO in Translator.translate); and certainly StringGroovyMethods which has some Closure-based methods
             List<String> fileNames = asList("DefaultGroovyMethods", "ProcessGroovyMethods", "DefaultGroovyStaticMethods");
 
             List<JavaFileObject> src = new ArrayList<>();
@@ -72,24 +71,30 @@ public class Driver {
 
             final DeclaredType closureType = t.types.getDeclaredType(t.elements.getTypeElement(Closure.class.getName()));
 
-            /**
-             * Criteria:
-             *      1. public static method
-             *      2. has a Closure parameter in one of the arguments, not in the receiver
-             */
+            // TODO move all this into Translator
             Predicate<ExecutableElement> selector = (e) -> {
-                return e.getKind() == ElementKind.METHOD
-                    && e.getModifiers().containsAll(PUBLIC_STATIC)
-                    && e.getParameters().subList(1, e.getParameters().size()).stream()
-                        .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
-                    && !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString()+"."+e.getSimpleName().toString());
+                boolean r =
+                        // Only interested here in methods; not currently handling nested classes.
+                        e.getKind() == ElementKind.METHOD
+                        // Top-level invocations can only be to public static methods. But some private/protected static helper methods need translation, too.
+                        && e.getModifiers().contains(Modifier.STATIC)
+                        // Has a Closure parameter in one of the arguments (not in the receiver).
+                        // TODO need to accept nonpublic (helper) methods taking Closure as the first parameter. In fact may need to accept any helper methods.
+                        && e.getParameters().subList(1, e.getParameters().size()).stream()
+                                .anyMatch(p -> t.types.isAssignable(p.asType(), closureType))
+                        // Ran into problems resolving overloads from these methods. TODO might be obsolete with new overload delegation system.
+                        && e.getAnnotation(Deprecated.class) == null;
+                //System.err.println("Translating " + e + "? " + r);
+                return r;
             };
 
             for (String name : fileNames) {
                 t.translate(
                         "org.codehaus.groovy.runtime."+name,
                         "com.cloudbees.groovy.cps.Cps"+name,
-                        selector);
+                        selector,
+                        e -> !EXCLUSIONS.contains(e.getEnclosingElement().getSimpleName().toString() + "." + e.getSimpleName().toString()),
+                        groovySrcJar.getName());
             }
 
 
@@ -103,15 +108,15 @@ public class Driver {
         return System.out::println;
     }
 
-    private static final Collection<Modifier> PUBLIC_STATIC = Arrays.asList(Modifier.PUBLIC, Modifier.STATIC);
-
-    private static final Set<String> EXCLUSIONS = new HashSet<>(Arrays.asList(
+    private static final Set<String> EXCLUSIONS = ImmutableSet.of(
             "DefaultGroovyMethods.runAfter", /* use anonymous inner class we can't handle */
             "DefaultGroovyMethods.accept" /* launches a thread */,
+            "DefaultGroovyStaticMethods.start", "DefaultGroovyStaticMethods.startDaemon", // ditto
             "DefaultGroovyMethods.filterLine",    /* anonymous inner classes */
             "DefaultGroovyMethods.dropWhile","DefaultGroovyMethods.takeWhile" /* TODO: translate inner classes to support this*/,
+            "DefaultGroovyMethods.toUnique", // ditto: UniqueIterator is private
 
             "ProcessGroovyMethods.withWriter",
             "ProcessGroovyMethods.withOutputStream" /* anonymous inner class */
-    ));
+    );
 }

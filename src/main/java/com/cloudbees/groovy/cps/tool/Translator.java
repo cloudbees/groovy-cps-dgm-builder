@@ -12,6 +12,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JOp;
 import com.sun.codemodel.JType;
+import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ArrayTypeTree;
@@ -61,7 +62,6 @@ import com.sun.tools.javac.code.Types.DefaultSymbolVisitor;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
-import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -83,8 +83,14 @@ import javax.tools.JavaCompiler.CompilationTask;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
+import javax.annotation.Generated;
+import javax.lang.model.element.Modifier;
 
 /**
  * Generates {@code CpsDefaultGroovyMethods} from the source code of {@code DefaultGroovyMethods}.
@@ -107,7 +113,6 @@ public class Translator {
     private final JClass $CpsCallableInvocation;
     private final JClass $Builder;
     private final JClass $CatchExpression;
-    private final JClass $DefaultGroovyMethods;
 
     /**
      * Parsed source files.
@@ -125,7 +130,6 @@ public class Translator {
         $CpsCallableInvocation = codeModel.ref("com.cloudbees.groovy.cps.impl.CpsCallableInvocation");
         $Builder               = codeModel.ref("com.cloudbees.groovy.cps.Builder");
         $CatchExpression       = codeModel.ref("com.cloudbees.groovy.cps.CatchExpression");
-        $DefaultGroovyMethods  = codeModel.ref("org.codehaus.groovy.runtime.DefaultGroovyMethods");
 
         trees = Trees.instance(javac);
         elements = javac.getElements();
@@ -138,8 +142,10 @@ public class Translator {
     /**
      * Transforms a single class.
      */
-    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector) throws JClassAlreadyExistsException {
+    public void translate(String fqcn, String outfqcn, Predicate<ExecutableElement> methodSelector, Predicate<ExecutableElement> supportedSelector, String sourceJarName) throws JClassAlreadyExistsException {
+        // TODO avoid calling _class until we have confirmed we are selecting at least one method
         final JDefinedClass $output = codeModel._class(outfqcn);
+        $output.annotate(Generated.class).param("value", Translator.class.getName()).param("date", new Date().toString()).param("comments", "based on " + sourceJarName);
 
         CompilationUnitTree dgmCut = getDefaultGroovyMethodCompilationUnitTree(parsed);
 
@@ -148,7 +154,7 @@ public class Translator {
             public Void visitExecutable(ExecutableElement e, Void __) {
                 if (methodSelector.test(e)) {
                     try {
-                        translateMethod(dgmCut, e, $output);
+                        translateMethod(dgmCut, e, $output, fqcn, supportedSelector.test(e));
                     } catch (Exception x) {
                         throw new RuntimeException("Unable to transform "+fqcn+"."+e, x);
                     }
@@ -172,44 +178,99 @@ public class Translator {
 
     /**
      * @param e
-     *      Method in {@link DefaultGroovyMethods} to translate.
+     *      Method in {@code fqcn} to translate.
      */
-    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output) {
+    private void translateMethod(final CompilationUnitTree cut, ExecutableElement e, JDefinedClass $output, String fqcn, boolean supported) {
         String methodName = n(e);
-        JMethod m = $output.method(JMod.PUBLIC | JMod.STATIC, t(e.getReturnType()), methodName);
+        boolean isPublic = e.getModifiers().contains(Modifier.PUBLIC);
 
-        e.getTypeParameters().forEach( p -> m.generify(n(p)));  // TODO: bound
+        // To allow sibling calls to overloads to be resolved properly at runtime, write the actual implementation to an overload-proof private method.
+        StringBuilder overloadResolved = new StringBuilder("$").append(methodName);
+        e.getParameters().forEach(ve -> {
+            overloadResolved.append("__").append(types.erasure(ve.asType()).toString().replace("[]", "_array").replaceAll("[^\\p{javaJavaIdentifierPart}]+", "_"));
+        }); // so, e.g., $eachByte__byte_array__groovy_lang_Closure
+        JMethod delegating = $output.method(isPublic ? JMod.PUBLIC | JMod.STATIC : JMod.STATIC, (JType) null, methodName);
+        JMethod m = supported ? $output.method(JMod.PRIVATE | JMod.STATIC, (JType) null, overloadResolved.toString()) : null;
 
+        Map<String, JTypeVar> typeVars = new HashMap<>();
+        e.getTypeParameters().forEach(p -> {
+            String name = n(p);
+            JTypeVar typeVar = delegating.generify(name);
+            JTypeVar typeVar2 = supported ? m.generify(name) : null;
+            p.getBounds().forEach(b -> {
+                JClass binding = (JClass) t(b, typeVars);
+                typeVar.bound(binding);
+                if (supported) {
+                    typeVar2.bound(binding);
+                }
+            });
+            typeVars.put(name, typeVar);
+        });
+        JType type = t(e.getReturnType(), typeVars);
+        delegating.type(type);
+        if (supported) {
+            m.type(type);
+        }
+
+        List<JVar> delegatingParams = new ArrayList<>();
         List<JVar> params = new ArrayList<>();
-        e.getParameters().forEach(p -> params.add(m.param(t(p.asType()), n(p))));
+        e.getParameters().forEach(p -> {
+            JType paramType = t(p.asType(), typeVars);
+            delegatingParams.add(delegating.param(paramType, n(p)));
+            if (supported) {
+                params.add(m.param(paramType, n(p)));
+            }
+        });
 
-        e.getThrownTypes().forEach( ex -> m._throws((JClass)t(ex)) );
+        e.getThrownTypes().forEach(ex -> {
+            delegating._throws((JClass)t(ex));
+            if (supported) {
+                m._throws((JClass)t(ex));
+            }
+        });
 
-        {// preamble
+        boolean returnsVoid = e.getReturnType().getKind() == TypeKind.VOID;
+
+        if (isPublic) {// preamble
             /*
                 If the call to this method happen outside CPS code, execute normally via DefaultGroovyMethods
              */
-            m.body()._if(JOp.cand(
+            delegating.body()._if(JOp.cand(
                     JOp.not($Caller.staticInvoke("isAsynchronous").tap(inv -> {
-                        inv.arg(params.get(0));
+                        inv.arg(delegatingParams.get(0));
                         inv.arg(methodName);
-                        for (int i = 1; i < params.size(); i++)
-                            inv.arg(params.get(i));
+                        for (int i = 1; i < delegatingParams.size(); i++)
+                            inv.arg(delegatingParams.get(i));
                     })),
                     JOp.not($Caller.staticInvoke("isAsynchronous")
                             .arg($output.dotclass())
                             .arg(methodName)
                             .args(params))
             ))._then().tap(blk -> {
-                JInvocation forward = $DefaultGroovyMethods.staticInvoke(methodName).args(params);
+                JClass $WhateverGroovyMethods  = codeModel.ref(fqcn);
+                JInvocation forward = $WhateverGroovyMethods.staticInvoke(methodName).args(delegatingParams);
 
-                if (e.getReturnType().getKind() == TypeKind.VOID) {
+                if (returnsVoid) {
                     blk.add(forward);
                     blk._return();
                 } else {
                     blk._return(forward);
                 }
             });
+        }
+
+        if (supported) {
+            JInvocation delegateCall = $output.staticInvoke(overloadResolved.toString());
+            if (returnsVoid) {
+                delegating.body().add(delegateCall);
+            } else {
+                delegating.body()._return(delegateCall);
+            }
+            delegatingParams.forEach(p -> delegateCall.arg(p));
+        } else {
+            delegating.body()._throw(JExpr._new(codeModel.ref(UnsupportedOperationException.class))
+                .arg(fqcn + "." + e + " is not yet supported for translation; use another idiom, or wrap in @NonCPS"));
+            return;
         }
 
         JVar $b = m.body().decl($Builder, "b", JExpr._new($Builder).arg(JExpr.invoke("loc").arg(methodName)));
@@ -246,26 +307,34 @@ public class Translator {
             @Override
             public JExpression visitMethodInvocation(MethodInvocationTree mt, Void __) {
                 ExpressionTree ms = mt.getMethodSelect();
-                JInvocation inv = $b.invoke("functionCall")
-                        .arg(loc(mt));
+                JInvocation inv;
 
                 if (ms instanceof MemberSelectTree) {
                     MemberSelectTree mst = (MemberSelectTree) ms;
-                    inv
+                    inv = $b.invoke("functionCall")
+                        .arg(loc(mt))
                         .arg(visit(mst.getExpression()))
                         .arg(n(mst.getIdentifier()));
                 } else
                 if (ms instanceof JCIdent) {
                     // invocation without object selection, like  foo(bar,zot)
                     JCIdent it = (JCIdent) ms;
-                    if (!it.sym.owner.toString().equals(DefaultGroovyMethods.class.getName())) {
+                    if (!it.sym.owner.toString().equals(fqcn)) {
                         // static import
-                        inv.arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
-                           .arg(n(it));
+                        inv = $b.invoke("functionCall")
+                            .arg(loc(mt))
+                            .arg($b.invoke("constant").arg(t(it.sym.owner.type).dotclass()))
+                            .arg(n(it));
                     } else {
                         // invocation on this class
-                        inv.arg($b.invoke("this_"))
-                           .arg(n(it));
+                        StringBuilder overloadResolved = new StringBuilder("$").append(it.getName());
+                        it.type.getParameterTypes().forEach(t -> {
+                            overloadResolved.append("__").append(types.erasure(t).toString().replace("[]", "_array").replaceAll("[^\\p{javaJavaIdentifierPart}]+", "_"));
+                        });
+                        inv = $b.invoke("staticCall")
+                            .arg(loc(mt))
+                            .arg($output.dotclass())
+                            .arg(overloadResolved.toString());
                     }
                 } else {
                     // TODO: figure out what can come here
@@ -416,6 +485,8 @@ public class Translator {
                 case CONDITIONAL_AND:       return "logicalAnd";
                 case PLUS:                  return "plus";
                 case PLUS_ASSIGNMENT:       return "plusEqual";
+                case MINUS:                 return "minus";
+                case MINUS_ASSIGNMENT:      return "minusEqual";
                 }
                 throw new UnsupportedOperationException(kind.toString());
             }
@@ -431,9 +502,8 @@ public class Translator {
             @Override
             public JExpression visitNewArray(NewArrayTree nt, Void __) {
                 if (nt.getInitializers()!=null) {
-                    return $b.invoke("newArrayFromInitializers").tap(inv -> {
-                        inv.arg(loc(nt));
-                        inv.arg(t(nt.getType()).dotclass());
+                    // This syntax does not seem to exist in Groovy (kohsuke in 88006fc tried to use a nonexistent Builder.newArrayFromInitializers).
+                    return $b.invoke("list").tap(inv -> {
                         nt.getInitializers().forEach(d -> inv.arg(visit(d)));
                     });
                 } else {
@@ -551,7 +621,7 @@ public class Translator {
             for (Tree t : cut.getTypeDecls()) {
                 if (t.getKind() == Kind.CLASS) {
                     ClassTree ct = (ClassTree)t;
-                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) {
+                    if (ct.getSimpleName().toString().equals("DefaultGroovyMethods")) { // TODO use fqcn
                         return cut;
                     }
                 }
@@ -605,6 +675,10 @@ public class Translator {
     }
 
     private JType t(TypeMirror m) {
+        return t(m, Collections.emptyMap());
+    }
+
+    private JType t(TypeMirror m, Map<String, JTypeVar> typeVars) {
         if (m.getKind().isPrimitive())
             return JType.parse(codeModel,m.toString());
 
@@ -624,14 +698,20 @@ public class Translator {
                     return base;
 
                 List<JClass> typeArgs = new ArrayList<>();
-                t.getTypeArguments().forEach( a -> typeArgs.add((JClass)t(a)));
+                t.getTypeArguments().forEach(a -> typeArgs.add((JClass) t(a, typeVars)));
                 return base.narrow(typeArgs);
             }
 
             @Override
             public JType visitTypeVariable(TypeVariable t, Void __) {
-                // handling this correctly requires us tracking JTypeVar
-                return t(t.getUpperBound());
+                String name = t.asElement().getSimpleName().toString();
+                JTypeVar var = typeVars.get(name);
+                if (var != null) {
+                    return var; // TODO bounds
+                } else {
+                    // TODO <T,U>with(U,groovy.lang.Closure<T>) somehow asks us to visit V, huh?
+                    return t(t.getUpperBound(), typeVars);
+                }
             }
 
             @Override
@@ -641,13 +721,13 @@ public class Translator {
 
             @Override
             public JType visitArray(ArrayType t, Void __) {
-                return t(t.getComponentType()).array();
+                return t(t.getComponentType(), typeVars).array();
             }
 
             @Override
             public JType visitWildcard(WildcardType t, Void aVoid) {
                 if (t.getExtendsBound()!=null) {
-                    return t(t.getExtendsBound()).boxify().wildcard();
+                    return t(t.getExtendsBound(), typeVars).boxify().wildcard();
                 }
                 if (t.getSuperBound()!=null) {
                     throw new UnsupportedOperationException();
